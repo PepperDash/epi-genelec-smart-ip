@@ -1,13 +1,13 @@
 ![PepperDash Essentials Plugin Logo](/images/essentials-plugin-blue.png)
 
-![PepperDash Essentials](https://img.shields.io/badge/PepperDash%20Essentials-≥%20v2.43.1-blue)
+![PepperDash Essentials](https://img.shields.io/badge/PepperDash%20Essentials-≥%20v2.39.0-blue)
 ![.NET](https://img.shields.io/badge/.NET%20Framework-4.7.2-512BD4)
 ![Crestron](https://img.shields.io/badge/Crestron-4--Series-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 # Genelec Smart IP Essentials Plugin (c) 2026
 
-> **`maintenance-essentials-v2` branch:** this build targets **Essentials v2** (`net472`, PepperDashEssentials 2.43.1) for systems that have not moved to Essentials v3. New work goes to `main` (Essentials v3, `net8`) first and is ported here when a v2 system needs it.
+> **`maintenance-essentials-v2` branch:** this build targets **Essentials v2** (`net472`, PepperDashEssentials 2.39.0) for systems that have not moved to Essentials v3. New work goes to `main` (Essentials v3, `net8`) first and is ported here when a v2 system needs it.
 
 ## License
 
@@ -133,7 +133,7 @@ Bridge the device with an `eiscApiAdvanced` bridge entry. Inputs are numbered in
 
 ## Minimum Essentials Framework Versions
 
-* 2.43.1 (this branch, Essentials v2)
+* 2.39.0 (this branch, Essentials v2)
 * 3.0.0 (`main`, Essentials v3)
 
 ## Supported Types

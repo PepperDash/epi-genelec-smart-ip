@@ -16,7 +16,7 @@ namespace PepperDash.Essentials.Plugins
     {
       // Keep equal to the PepperDashEssentials PackageReference version in the csproj: the version
       // this plugin is compiled against is its minimum
-      MinimumEssentialsFrameworkVersion = "2.43.1";
+      MinimumEssentialsFrameworkVersion = "2.39.0";
 
       TypeNames = new List<string> { "genelecSmartIp" };
     }
