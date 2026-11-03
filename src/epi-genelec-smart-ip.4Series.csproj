@@ -31,7 +31,7 @@
 
 	<ItemGroup>
 		<!-- Keep equal to MinimumEssentialsFrameworkVersion (numeric core) in the factory -->
-		<PackageReference Include="PepperDashEssentials" Version="2.43.1">
+		<PackageReference Include="PepperDashEssentials" Version="2.39.0">
 			<ExcludeAssets>runtime</ExcludeAssets>
 		</PackageReference>
 	</ItemGroup>
