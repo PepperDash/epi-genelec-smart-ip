@@ -12,7 +12,7 @@ public class FactoryTests
   public void Assembly_Loads_And_Has_Expected_Name()
   {
     AssemblyFixture.PluginAssembly.GetName().Name
-        .Should().Be("PepperDash.Essentials.Plugins.Genelec.SmartIp");
+        .Should().Be("PepperDash.Essentials.Plugins.Genelec.Smart.Ip");
   }
 
   [Fact]
