@@ -141,7 +141,7 @@ namespace PepperDash.Essentials.Plugins
     #region Lifecycle
 
     /// <inheritdoc />
-    protected override void Initialize()
+    public override void Initialize()
     {
       base.Initialize();
 

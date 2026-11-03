@@ -82,7 +82,7 @@ namespace PepperDash.Essentials.Plugins
           if (string.IsNullOrWhiteSpace(text)) return new JObject();
 
           try { return JObject.Parse(text); }
-          catch (JsonException) { return new JObject(); }
+          catch (JsonReaderException) { return new JObject(); }
         }
       }
       catch (Exception ex) when (ex is HttpRequestException || ex is TaskCanceledException || ex is OperationCanceledException)

@@ -23,9 +23,9 @@ public static class AssemblyFixture
       Path.GetFullPath(Path.Combine(
           AppContext.BaseDirectory,
           "..", "..", "..", "..",
-          // "net8" (not "net8.0") — the plugin csproj pins <TargetFramework>net8</TargetFramework>
+          // "net472" — the plugin csproj pins <TargetFramework>net472</TargetFramework> (Essentials v2)
           // and the output folder mirrors it verbatim. See the Step 3 gotchas below.
-          "src", "bin", Configuration, "net8",
+          "src", "bin", Configuration, "net472",
           "PepperDash.Essentials.Plugins.Genelec.Smart.Ip.dll"));
 
   private static string PluginOutputDir => Path.GetDirectoryName(PluginDllPath)!;
