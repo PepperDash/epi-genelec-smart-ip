@@ -26,7 +26,7 @@ public static class AssemblyFixture
           // "net8" (not "net8.0") — the plugin csproj pins <TargetFramework>net8</TargetFramework>
           // and the output folder mirrors it verbatim. See the Step 3 gotchas below.
           "src", "bin", Configuration, "net8",
-          "PepperDash.Essentials.Plugins.Genelec.SmartIp.dll"));
+          "PepperDash.Essentials.Plugins.Genelec.Smart.Ip.dll"));
 
   private static string PluginOutputDir => Path.GetDirectoryName(PluginDllPath)!;
 

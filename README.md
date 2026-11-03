@@ -143,7 +143,7 @@ Bridge the device with an `eiscApiAdvanced` bridge entry. Inputs are numbered in
 dotnet build src/epi-genelec-smart-ip.4Series.csproj
 ```
 
-Output: `output/PepperDash.Essentials.Plugins.Genelec.SmartIp.<version>.cplz`
+Output: `output/PepperDash.Essentials.Plugins.Genelec.Smart.Ip.<version>.cplz`
 
 ## Git Hooks (Husky.Net)
 
