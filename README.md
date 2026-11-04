@@ -274,6 +274,51 @@ a warning is logged). A `muteGroup` member keeps `fixedLevelDb`, which is the po
 * **Commissioning check:** after reading each member's device info, the group warns once if the speaker's
   `volIp` / `volPort` don't match the group it's listed in, or if multicast is disabled on it (`0.0.0.0`).
 
+### Speakers plus a fixed-level subwoofer: how the two groups work together
+
+**Membership is set on the speakers, not in this config.** A speaker obeys every message sent to the multicast
+address and port it listens on (`volIp` / `volPort`, set in Smart IP Manager). It never sees messages sent to
+any other address. The `members` lists in the config don't change what a speaker receives. They only tell the
+group which `genelecSmartIp` devices to read feedback from, repair, and check.
+
+So a sub that must keep its own level needs **its own address**. If it shared the mains' address it would get
+every level message too. `fixedLevelDb` would then put it back to its level on the next poll, so the sub would
+jump with every volume change and return a few seconds later.
+
+With Front Left / Front Right on `volumeGroup` and the Subwoofer on `muteGroup`:
+
+| Action | Message | Sent to | Front Left / Front Right | Subwoofer |
+|---|---|---|---|---|
+| Set volume / ramp | `level` | `volumeGroup` only | change level | unchanged: never receives level |
+| Mute / unmute | `mute` | both groups | mute / unmute | mute / unmute |
+| Power off / on | `state` `STANDBY` / `BOOT` | both groups | standby / wake | standby / wake |
+| Repair (a member missed a message) | the missed value | that member's group | level and/or mute re-sent | mute re-sent |
+
+How the sub's level stays put:
+* The sub's own `genelecSmartIp` device holds `fixedLevelDb` (e.g. -12). It sets that level whenever the sub
+  is on and reports anything else: at startup, after a reboot, or after a change made in Smart IP Manager.
+* The group never sends a level to `muteGroup`, so it never fights `fixedLevelDb`.
+* For the mains it's the other way round: don't give a `volumeGroup` member `fixedLevelDb`, or it puts its
+  level back after every group change. The group logs a warning if one does.
+
+Example: the room is at -30 dB and the user ramps up to -20 dB, then mutes.
+1. During the ramp, level messages go to `239.10.10.1:49152`. Front Left and Front Right follow; the sub stays at -12.
+2. Mute: `{"mcast":{"ver":1,"mute":true}}` goes to `239.10.10.1:49152` **and** `239.10.10.2:49153`. All three mute.
+3. A few seconds later the members' polls report -20 / muted (sub: -12 / muted). Everything matches, so nothing is re-sent.
+
+Other layouts:
+* **No fixed-level speaker:** leave `muteGroup` out and put every speaker on `volumeGroup`.
+* **A sub that follows the volume:** put it on `volumeGroup` too, without `fixedLevelDb`. It then moves with
+  the mains; any offset between them has to be set on the sub itself (e.g. its profile).
+* **Mute-only speaker without `fixedLevelDb`:** it works; its level is just whatever it was last set to, e.g. in
+  Smart IP Manager. `fixedLevelDb` makes sure it returns to that level after a reset or speaker swap.
+
+Several rooms on one network:
+* Each room's groups need their own addresses, e.g. room A `239.10.10.1` / `.2`, room B `239.10.10.3` / `.4`.
+  A shared address means one room's volume or mute reaches the other room's speakers.
+* Two rooms on the same address are also not caught by the commissioning check, because each speaker's
+  `volIp` matches the group it's listed in.
+
 Limits: the multicast API itself returns nothing, so feedback is only as fresh as the members' polling
 (`pollTimeMs`). There's no SIMPL bridge for the group yet.
 
