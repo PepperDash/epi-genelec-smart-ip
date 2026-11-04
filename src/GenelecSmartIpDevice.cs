@@ -39,6 +39,7 @@ namespace PepperDash.Essentials.Plugins
     private readonly object stateLock = new object();
     private readonly double? fixedLevelDb;
     private readonly GenelecSmartIpLatestValueSender<double> levelSender;
+    private GenelecSmartIpInputItem fixedInputItem;
 
     private Timer pollTimer;
     private Timer rampTimer;
@@ -98,6 +99,7 @@ namespace PepperDash.Essentials.Plugins
       ModelFeedback = new StringFeedback("Model", () => model);
 
       BuildInputs();
+      ResolveFixedInput();
 
       inputs.CurrentItemChanged += (s, e) =>
       {
@@ -222,6 +224,11 @@ namespace PepperDash.Essentials.Plugins
 
       var inp = await rest.GetAsync("/audio/inputs").ConfigureAwait(false);
       if (inp != null) ApplyInputs(inp);
+
+      if (inp != null && fixedInputItem != null)
+      {
+        await EnforceFixedInputAsync(inp, fixedInputItem).ConfigureAwait(false);
+      }
 
       if (Volatile.Read(ref deviceInfoStale) == 1)
       {
@@ -531,8 +538,53 @@ namespace PepperDash.Essentials.Plugins
       SelectInput(inputOrder[index - 1]);
     }
 
+    /// <summary>
+    /// Resolves fixedInput against the configured input items; a key that names no item is ignored
+    /// </summary>
+    private void ResolveFixedInput()
+    {
+      bool notFound;
+      var key = GenelecSmartIpInputMatch.ResolveKey(config.FixedInput, inputOrder.Select(i => i.Key), out notFound);
+      if (notFound)
+      {
+        this.LogWarning("fixedInput '{FixedInput}' is not one of the configured inputs ({Keys}); ignoring it, inputs stay under normal control",
+            config.FixedInput, string.Join(", ", inputOrder.Select(i => i.Key)));
+        return;
+      }
+      if (key == null) return;
+
+      fixedInputItem = inputOrder.First(i => i.Key == key);
+      this.LogInformation("Input fixed to {Key} ({Inputs}) (fixedInput); input-select commands will be ignored",
+          fixedInputItem.Key, string.Join("+", fixedInputItem.SmartIpInputs));
+    }
+
+    /// <summary>
+    /// Puts the speaker back on the fixed input when the polled input set differs
+    /// </summary>
+    private async Task EnforceFixedInputAsync(JObject inp, GenelecSmartIpInputItem item)
+    {
+      var arr = inp["input"] as JArray;
+      var current = arr != null ? arr.Select(t => (string)t).ToList() : new List<string>();
+      if (GenelecSmartIpInputMatch.SameSet(current, item.SmartIpInputs)) return;
+
+      this.LogInformation("Applying fixed input {Key} ({Inputs}); speaker reported {Current}",
+          item.Key, string.Join("+", item.SmartIpInputs), current.Count > 0 ? string.Join("+", current) : "none");
+
+      if (await rest.PutAsync("/audio/inputs", new { input = item.SmartIpInputs }).ConfigureAwait(false))
+      {
+        inputs.CurrentItem = item.Key;
+      }
+      // on failure the next poll tries again
+    }
+
     private void SelectInput(GenelecSmartIpInputItem item)
     {
+      if (fixedInputItem != null)
+      {
+        this.LogDebug("Input select {Key} ignored: input is fixed to {Fixed} (fixedInput)", item.Key, fixedInputItem.Key);
+        return;
+      }
+
       Task.Run(async () =>
       {
         if (await rest.PutAsync("/audio/inputs", new { input = item.SmartIpInputs }).ConfigureAwait(false))
