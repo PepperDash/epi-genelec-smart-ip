@@ -27,7 +27,9 @@ Mobile control messengers are created automatically for the supported capabiliti
 | Device info | `IDeviceInfoProvider` | `GET /device/id`, `/device/info`, `/network/ipv4` (read once while ACTIVE, re-read after comms loss) |
 | SIMPL bridge | `IBridgeAdvanced` | |
 
-Not implemented: multicast control, mDNS discovery, profiles, LED, diagnostics (`/events`), network configuration writes.
+Two ways to deploy: control each speaker directly (`genelecSmartIp`), or control them as one group through the multicast API (`genelecSmartIpMulticastGroup`, see [Multicast group](#multicast-group-genelecsmartipmulticastgroup)).
+
+Not implemented: mDNS discovery, profiles, LED, diagnostics (`/events`), network configuration writes, multicast profile selection.
 
 Notes from the API guide:
 * The speaker allows 4 simultaneous connections. The plugin serializes requests and sends `Connection: close`.
@@ -203,9 +205,82 @@ With `fixedInput` set, the input-select joins (digitals 11-20 and analog 2 from 
 * 2.39.0 (this branch, Essentials v2)
 * 3.0.0 (`main`, Essentials v3)
 
+## Multicast group (`genelecSmartIpMulticastGroup`)
+
+Controls several speakers as one group with the Smart IP **multicast** API (API doc sections 5-6): one UDP
+message reaches every speaker listening on the group's address. Use it as the room's volume device
+(`defaultAudioKey`) when one control should drive all the speakers.
+
+It uses **two multicast groups**, so a fixed-level speaker can follow mute without following volume:
+
+| Group | Gets | Typical members |
+|---|---|---|
+| `volumeGroup` (required) | level, mute, power | Front Left, Front Right |
+| `muteGroup` (optional) | mute, power | Subwoofer kept at a fixed level |
+
+Each speaker listens on exactly one multicast address and port (its `volIp` / `volPort`), so a speaker in the
+mute group never receives level messages.
+
+### Setup on the speakers
+In Smart IP Manager, give each speaker the multicast address and port of its group, e.g. Front Left and
+Front Right `239.10.10.1:49152`, Subwoofer `239.10.10.2:49153`. Use an address in 224.0.0.0-239.255.255.255
+and a port in 49152-65535. The network must pass multicast between the processor and the speakers (same
+network segment, IGMP snooping with a querier on the switches).
+
+### Config
+Keep a `genelecSmartIp` device for every speaker: the multicast API has no replies, so these devices provide
+feedback, online status and repair. Then add the group:
+
+```json
+{
+  "key": "room-audio", "name": "Room Audio", "type": "genelecSmartIpMulticastGroup", "group": "audio",
+  "properties": {
+    "volumeGroup": { "address": "239.10.10.1", "port": 49152, "members": [ "genelec-front-left", "genelec-front-right" ] },
+    "muteGroup":   { "address": "239.10.10.2", "port": 49153, "members": [ "genelec-subwoofer" ] },
+    "volumeMinDb": -60,
+    "volumeMaxDb": 0,
+    "volumeStepDb": 1.0,
+    "volumeRampIntervalMs": 250,
+    "localAddress": "",
+    "sendCount": 2,
+    "repairDelayMs": 6000
+  }
+}
+```
+
+| Property | Default | Notes |
+|---|---|---|
+| `volumeGroup` | required | `address`, `port`, `members` (keys of `genelecSmartIp` devices on this group) |
+| `muteGroup` | not set | Same shape. Mute and power only |
+| `volumeMinDb` / `volumeMaxDb` | -60 / 0 | dB range mapped to the group's 0-65535 volume; clamped to the multicast range -130..0 |
+| `volumeStepDb` / `volumeRampIntervalMs` | 1.0 / 250 | Volume up/down ramp |
+| `localAddress` | OS chooses | Processor interface to send from. On a processor with a LAN and a control subnet, set the LAN address so the multicast leaves on the speakers' network |
+| `sendCount` | 2 | Times each message is sent (20 ms apart). Multicast has no acknowledgement; the messages are idempotent |
+| `repairDelayMs` | 6000 | Wait after a command before comparing members' polled values with the group (one 5 s poll plus margin) |
+
+Members: don't give a `volumeGroup` member `fixedLevelDb` (it would put its level back after every change;
+a warning is logged). A `muteGroup` member keeps `fixedLevelDb`, which is the point of the mute group.
+
+### Behaviour
+* **Volume:** `{"mcast":{"ver":1,"level":-30.0}}` to the volume group. Volume up/down ramp at group level.
+* **Mute:** `{"mcast":{"ver":1,"mute":true}}` to both groups.
+* **Power:** off sends `STANDBY`, on sends `BOOT` (multicast has no ACTIVE; the speakers reboot to wake, up to a minute), to both groups.
+* **Startup:** level and mute are learned from the first volume member's own reports; nothing is sent from a
+  placeholder. Until then the group's feedback shows that speaker's current value, set/on/off commands work,
+  and volume up/down and mute toggle are ignored.
+* **Repair:** once a command has settled, members' polled values are compared with the group every 2 s. A
+  member that missed a message (lost datagram) gets it re-sent to its group. Members offline or in standby are
+  skipped.
+* **Commissioning check:** after reading each member's device info, the group warns once if the speaker's
+  `volIp` / `volPort` don't match the group it's listed in, or if multicast is disabled on it (`0.0.0.0`).
+
+Limits: the multicast API itself returns nothing, so feedback is only as fresh as the members' polling
+(`pollTimeMs`). There's no SIMPL bridge for the group yet.
+
 ## Supported Types
 
-* `genelecSmartIp`
+* `genelecSmartIp`: one speaker, unicast REST API
+* `genelecSmartIpMulticastGroup`: several speakers as one group, multicast API
 
 ## Building
 

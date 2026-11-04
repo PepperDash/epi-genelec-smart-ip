@@ -157,6 +157,26 @@ namespace PepperDash.Essentials.Plugins
     /// <inheritdoc />
     public event DeviceInfoChangeHandler DeviceInfoChanged;
 
+    /// <summary>
+    /// Last level (dB) read from or sent to the speaker. Used by the multicast group to compare members
+    /// </summary>
+    public double LevelDb { get { return levelDb; } }
+
+    /// <summary>
+    /// True when fixedLevelDb is set: the speaker ignores volume commands and puts its level back each poll
+    /// </summary>
+    public bool HasFixedLevel { get { return fixedLevelDb.HasValue; } }
+
+    /// <summary>
+    /// The speaker's multicast group address (volIp from GET /network/ipv4), or null until device info is read
+    /// </summary>
+    public string MulticastAddress { get; private set; }
+
+    /// <summary>
+    /// The speaker's multicast group port (volPort from GET /network/ipv4), or null until device info is read
+    /// </summary>
+    public int? MulticastPort { get; private set; }
+
     #endregion
 
     #region Lifecycle
@@ -280,6 +300,18 @@ namespace PepperDash.Essentials.Plugins
       };
 
       model = (string)id["model"] ?? (string)info["model"] ?? string.Empty;
+
+      // multicast group membership, for the multicast group device's commissioning check (only these two
+      // fields are kept from the response; its credentials are never stored or logged)
+      if (net != null)
+      {
+        MulticastAddress = (string)net["volIp"];
+        var port = net["volPort"];
+        MulticastPort = port != null && (port.Type == JTokenType.Integer || port.Type == JTokenType.Float)
+            ? (int?)(int)port
+            : null;
+      }
+
       Interlocked.Exchange(ref deviceInfoStale, 0);
 
       this.LogInformation("Device info: model {Model}, serial {Serial}, firmware {Firmware}, API {ApiVer}",
