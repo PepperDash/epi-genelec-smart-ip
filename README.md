@@ -129,12 +129,22 @@ When it is set:
 * **Unknown keys ignored:** `fixedInput` is an item *key* (`danteLeft`), not an input name
   (`AoIP01`). A key that names no item is logged as a warning and ignored, so inputs stay under
   normal control.
+* **Invalid input names ignored:** the fixed item's `inputs` must use the API's names `A`, `AoIP01`
+  and `AoIP02` (any case). An item with anything else, e.g. the typo `AoIP1`, is logged as one
+  warning at startup and ignored. The plugin never sends it.
+* **Default keys:** when `inputs` is omitted, the default items `analog`, `aoip1`, `aoip2` and
+  `aoip1and2` are valid `fixedInput` values.
+* **Quiet retries:** the first correction after the speaker was on the right input logs at
+  Information. If it keeps differing (e.g. the speaker accepts the PUT but doesn't change), repeat
+  attempts log at Debug.
 
 `fixedInput` and `fixedLevelDb` are independent: use either or both.
 
 ## Join Map
 
 Bridge the device with an `eiscApiAdvanced` bridge entry. Inputs are numbered in the order they appear in `inputs` config (max 10 on the bridge).
+
+With `fixedInput` set, the input-select joins (digitals 11-20 and analog 2 from SIMPL) are ignored, but their feedback still reports the speaker's current input. With `fixedLevelDb` set, the volume joins (digitals 5-6 and analog 1 from SIMPL) are ignored the same way, and volume feedback still reports the level.
 
 ### Digitals
 

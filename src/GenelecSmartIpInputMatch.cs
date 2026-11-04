@@ -13,6 +13,25 @@ namespace PepperDash.Essentials.Plugins
   public static class GenelecSmartIpInputMatch
   {
     /// <summary>
+    /// Input names PUT /audio/inputs accepts (Smart IP API Documentation v1 rev 0.8.4, section 4.8)
+    /// </summary>
+    public static readonly string[] ValidInputNames = { "A", "AoIP01", "AoIP02" };
+
+    /// <summary>
+    /// The entries of <paramref name="inputs"/> that are not valid Smart IP input names (compared
+    /// case-insensitively), in their original spelling. Null/empty entries count as invalid; a null or
+    /// empty list returns no entries (an item with no inputs is rejected earlier, when inputs are built)
+    /// </summary>
+    public static List<string> InvalidInputNames(IEnumerable<string> inputs)
+    {
+      return (inputs ?? Enumerable.Empty<string>())
+          .Where(s => string.IsNullOrWhiteSpace(s)
+                      || !ValidInputNames.Contains(s.Trim(), StringComparer.OrdinalIgnoreCase))
+          .Select(s => s ?? "(null)")
+          .ToList();
+    }
+
+    /// <summary>
     /// True when both lists name the same Smart IP inputs, ignoring order, duplicates and case
     /// (the device reports e.g. ["AoIP01","AoIP02"] for an item configured as ["AoIP02","AoIP01"])
     /// </summary>

@@ -47,6 +47,39 @@ public class InputMatchTests
     notFound.Should().BeFalse();
   }
 
+  [Theory]
+  [InlineData("A")]
+  [InlineData("AoIP01,AoIP02")]
+  [InlineData("aoip01,AOIP02,a")]   // mixed case is valid
+  public void InvalidInputNames_Accepts_Api_Names(string csv)
+  {
+    GenelecSmartIpInputMatch.InvalidInputNames(csv.Split(',')).Should().BeEmpty();
+  }
+
+  [Theory]
+  [InlineData(new[] { "AoIP1" }, new[] { "AoIP1" })]                       // typo
+  [InlineData(new[] { "AoIP01", "Dante1" }, new[] { "Dante1" })]           // only the bad entry is returned
+  [InlineData(new[] { "B", "AoIP03" }, new[] { "B", "AoIP03" })]
+  [InlineData(new[] { "" }, new[] { "" })]
+  public void InvalidInputNames_Returns_Only_The_Bad_Entries(string[] inputs, string[] expected)
+  {
+    GenelecSmartIpInputMatch.InvalidInputNames(inputs).Should().Equal(expected);
+  }
+
+  [Fact]
+  public void InvalidInputNames_Null_Entries_And_Lists()
+  {
+    GenelecSmartIpInputMatch.InvalidInputNames(new string?[] { "A", null }!).Should().Equal("(null)");
+    GenelecSmartIpInputMatch.InvalidInputNames(null).Should().BeEmpty();
+    GenelecSmartIpInputMatch.InvalidInputNames(new string[0]).Should().BeEmpty();
+  }
+
+  [Fact]
+  public void ValidInputNames_Match_The_Api_Doc()
+  {
+    GenelecSmartIpInputMatch.ValidInputNames.Should().Equal("A", "AoIP01", "AoIP02");
+  }
+
   [Fact]
   public void ResolveKey_Unknown_Key_Is_Rejected()
   {

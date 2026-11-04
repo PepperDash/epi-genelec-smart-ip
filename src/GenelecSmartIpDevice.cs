@@ -40,6 +40,7 @@ namespace PepperDash.Essentials.Plugins
     private readonly double? fixedLevelDb;
     private readonly GenelecSmartIpLatestValueSender<double> levelSender;
     private GenelecSmartIpInputItem fixedInputItem;
+    private bool fixedInputCorrecting;
 
     private Timer pollTimer;
     private Timer rampTimer;
@@ -553,7 +554,17 @@ namespace PepperDash.Essentials.Plugins
       }
       if (key == null) return;
 
-      fixedInputItem = inputOrder.First(i => i.Key == key);
+      var item = inputOrder.First(i => i.Key == key);
+      var invalid = GenelecSmartIpInputMatch.InvalidInputNames(item.SmartIpInputs);
+      if (invalid.Count > 0)
+      {
+        // a PUT with these would fail on every poll; reject up front like an unknown key
+        this.LogWarning("fixedInput '{Key}' has invalid input name(s) {Invalid} (valid: {Valid}); ignoring it, inputs stay under normal control",
+            key, string.Join(", ", invalid), string.Join(", ", GenelecSmartIpInputMatch.ValidInputNames));
+        return;
+      }
+
+      fixedInputItem = item;
       this.LogInformation("Input fixed to {Key} ({Inputs}) (fixedInput); input-select commands will be ignored",
           fixedInputItem.Key, string.Join("+", fixedInputItem.SmartIpInputs));
     }
@@ -565,10 +576,21 @@ namespace PepperDash.Essentials.Plugins
     {
       var arr = inp["input"] as JArray;
       var current = arr != null ? arr.Select(t => (string)t).ToList() : new List<string>();
-      if (GenelecSmartIpInputMatch.SameSet(current, item.SmartIpInputs)) return;
+      if (GenelecSmartIpInputMatch.SameSet(current, item.SmartIpInputs))
+      {
+        fixedInputCorrecting = false;
+        return;
+      }
 
-      this.LogInformation("Applying fixed input {Key} ({Inputs}); speaker reported {Current}",
-          item.Key, string.Join("+", item.SmartIpInputs), current.Count > 0 ? string.Join("+", current) : "none");
+      // Information on the first correction after the speaker was matching; Debug while it keeps
+      // retrying (e.g. the speaker accepts the PUT but doesn't change), so the log doesn't flood
+      var reported = current.Count > 0 ? string.Join("+", current) : "none";
+      if (!fixedInputCorrecting)
+        this.LogInformation("Applying fixed input {Key} ({Inputs}); speaker reported {Current}",
+            item.Key, string.Join("+", item.SmartIpInputs), reported);
+      else
+        this.LogDebug("Still applying fixed input {Key}; speaker reported {Current}", item.Key, reported);
+      fixedInputCorrecting = true;
 
       if (await rest.PutAsync("/audio/inputs", new { input = item.SmartIpInputs }).ConfigureAwait(false))
       {
