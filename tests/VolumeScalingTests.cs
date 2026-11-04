@@ -62,4 +62,44 @@ public class VolumeScalingTests
   {
     GenelecSmartIpVolumeScaling.Clamp(input, -130, 0).Should().Be(expected);
   }
+
+  [Fact]
+  public void FixedLevel_Null_Means_Feature_Off()
+  {
+    GenelecSmartIpVolumeScaling.NormalizeFixedLevel(null, out var rejected).Should().BeNull();
+    rejected.Should().BeFalse();
+  }
+
+  [Theory]
+  [InlineData(-12.0, -12.0)]
+  [InlineData(-12.34, -12.3)]
+  [InlineData(0.0, 0.0)]
+  [InlineData(-200.0, -200.0)]
+  public void FixedLevel_In_Api_Range_Is_Kept_And_Rounded(double input, double expected)
+  {
+    GenelecSmartIpVolumeScaling.NormalizeFixedLevel(input, out var rejected).Should().Be(expected);
+    rejected.Should().BeFalse();
+  }
+
+  [Theory]
+  [InlineData(0.1)]
+  [InlineData(12.0)]
+  [InlineData(-200.1)]
+  [InlineData(double.NaN)]
+  [InlineData(double.PositiveInfinity)]
+  public void FixedLevel_Outside_Api_Range_Is_Rejected(double input)
+  {
+    GenelecSmartIpVolumeScaling.NormalizeFixedLevel(input, out var rejected).Should().BeNull();
+    rejected.Should().BeTrue();
+  }
+
+  [Theory]
+  [InlineData(-12.0, -12.0, false)]
+  [InlineData(-12.04, -12.0, false)]  // within the 0.1 dB resolution
+  [InlineData(-12.1, -12.0, true)]
+  [InlineData(-30.0, -12.0, true)]
+  public void NeedsFixedLevel_Only_When_Level_Differs(double current, double target, bool expected)
+  {
+    GenelecSmartIpVolumeScaling.NeedsFixedLevel(current, target).Should().Be(expected);
+  }
 }

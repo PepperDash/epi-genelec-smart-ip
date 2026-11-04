@@ -34,5 +34,43 @@ namespace PepperDash.Essentials.Plugins
     {
       return Math.Round(Math.Max(minDb, Math.Min(maxDb, db)), 1);
     }
+
+    /// <summary>
+    /// Lowest level the unicast API accepts (dB)
+    /// </summary>
+    public const double ApiMinDb = -200.0;
+
+    /// <summary>
+    /// Highest level the unicast API accepts (dB)
+    /// </summary>
+    public const double ApiMaxDb = 0.0;
+
+    /// <summary>
+    /// Validates an optional fixed level: null stays null (feature off); a value inside the API range is
+    /// rounded to the device's 0.1 dB resolution; anything else (out of range, NaN, infinity) returns null
+    /// and sets <paramref name="rejected"/>
+    /// </summary>
+    public static double? NormalizeFixedLevel(double? db, out bool rejected)
+    {
+      rejected = false;
+      if (!db.HasValue) return null;
+
+      var v = db.Value;
+      if (double.IsNaN(v) || double.IsInfinity(v) || v < ApiMinDb || v > ApiMaxDb)
+      {
+        rejected = true;
+        return null;
+      }
+
+      return Math.Round(v, 1);
+    }
+
+    /// <summary>
+    /// True when the device level differs from the fixed level by more than half the 0.1 dB resolution
+    /// </summary>
+    public static bool NeedsFixedLevel(double currentDb, double fixedDb)
+    {
+      return Math.Abs(currentDb - fixedDb) > 0.05;
+    }
   }
 }
