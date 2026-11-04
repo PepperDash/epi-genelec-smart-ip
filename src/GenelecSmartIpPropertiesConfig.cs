@@ -105,6 +105,15 @@ namespace PepperDash.Essentials.Plugins
     public double? FixedLevelDb { get; set; }
 
     /// <summary>
+    /// Optional fixed input: the key of one item in <see cref="Inputs"/> (e.g. "danteLeft"). When set, the
+    /// plugin selects that item whenever the speaker is ACTIVE and playing a different input set (startup,
+    /// comms recovery, wake from standby, or a change made at the speaker), and ignores input-select
+    /// commands. A key that names no item is logged and ignored. Omit (or null) for normal input control
+    /// </summary>
+    [JsonProperty("fixedInput")]
+    public string FixedInput { get; set; }
+
+    /// <summary>
     /// Selectable inputs keyed by item key. If omitted/empty the defaults below are used
     /// </summary>
     [JsonProperty("inputs")]

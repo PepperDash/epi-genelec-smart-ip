@@ -75,6 +75,7 @@ Device type: `genelecSmartIp`
 | `volumeRampIntervalMs` | 250 | repeat rate while held (auto-stops after 200 steps) |
 | `inputs` | analog, aoip1, aoip2, aoip1and2 | Items map to a set of `A` / `AoIP01` / `AoIP02` |
 | `fixedLevelDb` | not set (optional) | Fixed "set and forget" level, -200.0 to 0.0 dB. See below |
+| `fixedInput` | not set (optional) | Key of one `inputs` item the speaker always plays. See below |
 
 ### Fixed level (`fixedLevelDb`)
 
@@ -100,9 +101,50 @@ When it is set:
 * **Bad values ignored:** a value outside -200.0 to 0.0 dB is logged as a warning and ignored, so
   volume stays under normal control.
 
+### Fixed input (`fixedInput`)
+
+Optional. Leave it out and inputs work normally. The speaker plays whichever of its inputs (`A`,
+`AoIP01`, `AoIP02`) are selected on the speaker itself, and the plugin only changes that when told
+to. Set `fixedInput` to the key of one of your `inputs` items to make sure each speaker always plays
+the right channel, for example after a speaker swap or factory reset:
+
+```json
+"properties": {
+  "host": "10.0.0.50",
+  "fixedInput": "danteLeft",
+  "inputs": {
+    "danteLeft": { "name": "Dante Left", "inputs": [ "AoIP01" ] }
+  }
+}
+```
+
+When it is set:
+
+* **Enforced on every poll:** whenever the speaker is `ACTIVE` and playing a different set of
+  inputs, the plugin selects the fixed item again. Order and case don't matter: `AoIP02`+`AoIP01`
+  matches an item of `AoIP01`+`AoIP02`. Like `fixedLevelDb`, correction happens on the next
+  successful ACTIVE poll.
+* **Input-select commands ignored:** input selects from the bridge or Mobile Control are dropped,
+  with a debug log line.
+* **Unknown keys ignored:** `fixedInput` is an item *key* (`danteLeft`), not an input name
+  (`AoIP01`). A key that names no item is logged as a warning and ignored, so inputs stay under
+  normal control.
+* **Invalid input names ignored:** the fixed item's `inputs` must use the API's names `A`, `AoIP01`
+  and `AoIP02` (any case, no surrounding spaces). An item with anything else, e.g. the typo `AoIP1`, is logged as one
+  warning at startup and ignored. The plugin never sends it.
+* **Default keys:** when `inputs` is omitted, the default items `analog`, `aoip1`, `aoip2` and
+  `aoip1and2` are valid `fixedInput` values.
+* **Quiet retries:** the first correction after the speaker was on the right input logs at
+  Information. If it keeps differing (e.g. the speaker accepts the PUT but doesn't change), repeat
+  attempts log at Debug.
+
+`fixedInput` and `fixedLevelDb` are independent: use either or both.
+
 ## Join Map
 
 Bridge the device with an `eiscApiAdvanced` bridge entry. Inputs are numbered in the order they appear in `inputs` config (max 10 on the bridge).
+
+With `fixedInput` set, the input-select joins (digitals 11-20 and analog 2 from SIMPL) are ignored, but their feedback still reports the speaker's current input. With `fixedLevelDb` set, the volume joins (digitals 5-6 and analog 1 from SIMPL) are ignored the same way, and volume feedback still reports the level.
 
 ### Digitals
 
