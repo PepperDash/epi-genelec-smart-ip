@@ -93,8 +93,8 @@ When it is set:
 
 * **Enforced on every poll:** whenever the speaker is `ACTIVE` and its level differs from
   `fixedLevelDb`, the plugin sets it back. That covers startup, coming back after a comms loss,
-  waking from standby, and a change made at the speaker or in Smart IP Manager. The fix lands
-  within one `pollTimeMs`.
+  waking from standby, and a change made at the speaker or in Smart IP Manager. Correction is
+  attempted on the next successful ACTIVE poll; request latency and failures can delay it.
 * **Volume commands ignored:** `SetVolume`, `VolumeUp` and `VolumeDown` from the bridge or Mobile
   Control are dropped, with a debug log line. Mute still works.
 * **Bad values ignored:** a value outside -200.0 to 0.0 dB is logged as a warning and ignored, so
