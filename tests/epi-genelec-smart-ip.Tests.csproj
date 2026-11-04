@@ -28,5 +28,7 @@
     <Compile Include="..\src\GenelecSmartIpVolumeScaling.cs" Link="GenelecSmartIpVolumeScaling.cs" />
     <Compile Include="..\src\GenelecSmartIpLatestValueSender.cs" Link="GenelecSmartIpLatestValueSender.cs" />
     <Compile Include="..\src\GenelecSmartIpInputMatch.cs" Link="GenelecSmartIpInputMatch.cs" />
+    <Compile Include="..\src\GenelecSmartIpMulticast.cs" Link="GenelecSmartIpMulticast.cs" />
+    <Compile Include="..\src\GenelecSmartIpMulticastSender.cs" Link="GenelecSmartIpMulticastSender.cs" />
   </ItemGroup>
 </Project>
