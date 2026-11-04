@@ -18,15 +18,17 @@ namespace PepperDash.Essentials.Plugins
     public static readonly string[] ValidInputNames = { "A", "AoIP01", "AoIP02" };
 
     /// <summary>
-    /// The entries of <paramref name="inputs"/> that are not valid Smart IP input names (compared
-    /// case-insensitively), in their original spelling. Null/empty entries count as invalid; a null or
-    /// empty list returns no entries (an item with no inputs is rejected earlier, when inputs are built)
+    /// The entries of <paramref name="inputs"/> that are not valid Smart IP input names, in their original
+    /// spelling. Case is ignored but whitespace is not: a padded name such as " AoIP01 " is invalid, because
+    /// it would be sent to the speaker as-is and never match what the speaker reports. Null/empty entries
+    /// count as invalid; a null or empty list returns no entries (an item with no inputs is rejected
+    /// earlier, when inputs are built)
     /// </summary>
     public static List<string> InvalidInputNames(IEnumerable<string> inputs)
     {
       return (inputs ?? Enumerable.Empty<string>())
-          .Where(s => string.IsNullOrWhiteSpace(s)
-                      || !ValidInputNames.Contains(s.Trim(), StringComparer.OrdinalIgnoreCase))
+          .Where(s => string.IsNullOrEmpty(s)
+                      || !ValidInputNames.Contains(s, StringComparer.OrdinalIgnoreCase))
           .Select(s => s ?? "(null)")
           .ToList();
     }

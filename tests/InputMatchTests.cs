@@ -61,6 +61,8 @@ public class InputMatchTests
   [InlineData(new[] { "AoIP01", "Dante1" }, new[] { "Dante1" })]           // only the bad entry is returned
   [InlineData(new[] { "B", "AoIP03" }, new[] { "B", "AoIP03" })]
   [InlineData(new[] { "" }, new[] { "" })]
+  [InlineData(new[] { " AoIP01 ", "AoIP02" }, new[] { " AoIP01 " })]      // padding would be sent as-is
+  [InlineData(new[] { "A ", "\tAoIP02" }, new[] { "A ", "\tAoIP02" })]
   public void InvalidInputNames_Returns_Only_The_Bad_Entries(string[] inputs, string[] expected)
   {
     GenelecSmartIpInputMatch.InvalidInputNames(inputs).Should().Equal(expected);

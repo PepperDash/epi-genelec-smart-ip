@@ -592,11 +592,9 @@ namespace PepperDash.Essentials.Plugins
         this.LogDebug("Still applying fixed input {Key}; speaker reported {Current}", item.Key, reported);
       fixedInputCorrecting = true;
 
-      if (await rest.PutAsync("/audio/inputs", new { input = item.SmartIpInputs }).ConfigureAwait(false))
-      {
-        inputs.CurrentItem = item.Key;
-      }
-      // on failure the next poll tries again
+      // Feedback stays driven by the inputs GET: a speaker can acknowledge the PUT without changing,
+      // so CurrentItem is not set here. The next poll confirms the correction (or retries it).
+      await rest.PutAsync("/audio/inputs", new { input = item.SmartIpInputs }).ConfigureAwait(false);
     }
 
     private void SelectInput(GenelecSmartIpInputItem item)

@@ -130,7 +130,7 @@ When it is set:
   (`AoIP01`). A key that names no item is logged as a warning and ignored, so inputs stay under
   normal control.
 * **Invalid input names ignored:** the fixed item's `inputs` must use the API's names `A`, `AoIP01`
-  and `AoIP02` (any case). An item with anything else, e.g. the typo `AoIP1`, is logged as one
+  and `AoIP02` (any case, no surrounding spaces). An item with anything else, e.g. the typo `AoIP1`, is logged as one
   warning at startup and ignored. The plugin never sends it.
 * **Default keys:** when `inputs` is omitted, the default items `analog`, `aoip1`, `aoip2` and
   `aoip1and2` are valid `fixedInput` values.
