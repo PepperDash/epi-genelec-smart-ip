@@ -26,5 +26,6 @@
     <ProjectReference Include="..\src\epi-genelec-smart-ip.4Series.csproj" ReferenceOutputAssembly="false" />
     <!-- Pure-logic helper (System only) linked for direct unit tests -->
     <Compile Include="..\src\GenelecSmartIpVolumeScaling.cs" Link="GenelecSmartIpVolumeScaling.cs" />
+    <Compile Include="..\src\GenelecSmartIpLatestValueSender.cs" Link="GenelecSmartIpLatestValueSender.cs" />
   </ItemGroup>
 </Project>
