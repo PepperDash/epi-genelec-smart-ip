@@ -74,6 +74,31 @@ Device type: `genelecSmartIp`
 | `volumeStepDb` | 1.0 | dB per VolumeUp/Down step |
 | `volumeRampIntervalMs` | 250 | repeat rate while held (auto-stops after 200 steps) |
 | `inputs` | analog, aoip1, aoip2, aoip1and2 | Items map to a set of `A` / `AoIP01` / `AoIP02` |
+| `fixedLevelDb` | not set (optional) | Fixed "set and forget" level, -200.0 to 0.0 dB. See below |
+
+### Fixed level (`fixedLevelDb`)
+
+Optional. Leave it out and volume works normally. Set it when the speaker should always play at
+one level and room volume is controlled somewhere else, for example a Cisco codec feeding the
+speaker's analog input:
+
+```json
+"properties": {
+  "host": "10.0.0.50",
+  "fixedLevelDb": -12
+}
+```
+
+When it is set:
+
+* **Enforced on every poll:** whenever the speaker is `ACTIVE` and its level differs from
+  `fixedLevelDb`, the plugin sets it back. That covers startup, coming back after a comms loss,
+  waking from standby, and a change made at the speaker or in Smart IP Manager. The fix lands
+  within one `pollTimeMs`.
+* **Volume commands ignored:** `SetVolume`, `VolumeUp` and `VolumeDown` from the bridge or Mobile
+  Control are dropped, with a debug log line. Mute still works.
+* **Bad values ignored:** a value outside -200.0 to 0.0 dB is logged as a warning and ignored, so
+  volume stays under normal control.
 
 ## Join Map
 

@@ -27,6 +27,7 @@ public class ConfigTests
   [InlineData("volumeStepDb")]
   [InlineData("volumeRampIntervalMs")]
   [InlineData("inputs")]
+  [InlineData("fixedLevelDb")]
   public void Config_Property_Has_JsonPropertyAttribute(string jsonName)
   {
     var has = ConfigType.GetProperties().Any(p => p.CustomAttributes.Any(a =>
@@ -53,6 +54,22 @@ public class ConfigTests
     src.Should().Contain("PollTimeMs { get; set; } = 5000");
     src.Should().Contain("VolumeMinDb { get; set; } = -130");
     src.Should().Contain("VolumeMaxDb { get; set; } = 0");
+  }
+
+  [Fact]
+  public void FixedLevelDb_Is_Optional()
+  {
+    // nullable, so an existing config without it deserializes unchanged (feature off)
+    var prop = ConfigType.GetProperty("FixedLevelDb")!;
+    prop.Should().NotBeNull();
+    prop.PropertyType.IsGenericType.Should().BeTrue();
+    prop.PropertyType.GetGenericTypeDefinition().FullName.Should().Be("System.Nullable`1");
+    prop.PropertyType.GetGenericArguments()[0].FullName.Should().Be("System.Double");
+
+    // no default value and never required
+    var src = AssemblyFixture.FindSourceForClass("GenelecSmartIpPropertiesConfig")!;
+    src.Should().Contain("public double? FixedLevelDb { get; set; }").And.NotContain("FixedLevelDb { get; set; } =");
+    src.Should().NotContain("Required.Always");
   }
 
   [Fact]

@@ -37,6 +37,7 @@ namespace PepperDash.Essentials.Plugins
     private readonly List<GenelecSmartIpInputItem> inputOrder = new List<GenelecSmartIpInputItem>();
     private readonly GenelecSmartIpCommunicationMonitor monitor;
     private readonly object stateLock = new object();
+    private readonly double? fixedLevelDb;
 
     private Timer pollTimer;
     private Timer rampTimer;
@@ -61,6 +62,18 @@ namespace PepperDash.Essentials.Plugins
       monitor = new GenelecSmartIpCommunicationMonitor(this);
 
       levelDb = config.VolumeMinDb;
+
+      bool rejected;
+      fixedLevelDb = GenelecSmartIpVolumeScaling.NormalizeFixedLevel(config.FixedLevelDb, out rejected);
+      if (rejected)
+      {
+        this.LogWarning("fixedLevelDb {Level} is outside {Min}..{Max} dB; ignoring it, volume stays under normal control",
+            config.FixedLevelDb, GenelecSmartIpVolumeScaling.ApiMinDb, GenelecSmartIpVolumeScaling.ApiMaxDb);
+      }
+      else if (fixedLevelDb.HasValue)
+      {
+        this.LogInformation("Level fixed at {Level} dB (fixedLevelDb); volume commands will be ignored", fixedLevelDb.Value);
+      }
 
       DeviceInfo = new DeviceInfoModel { IpAddress = config.Host };
 
@@ -193,6 +206,11 @@ namespace PepperDash.Essentials.Plugins
       if (vol != null && Volatile.Read(ref rampSteps) == 0)
       {
         ApplyVolume(vol);
+      }
+
+      if (vol != null && fixedLevelDb.HasValue)
+      {
+        await EnforceFixedLevelAsync(vol, fixedLevelDb.Value).ConfigureAwait(false);
       }
 
       var inp = await rest.GetAsync("/audio/inputs").ConfigureAwait(false);
@@ -345,7 +363,38 @@ namespace PepperDash.Essentials.Plugins
     /// <inheritdoc />
     public void SetVolume(ushort level)
     {
+      if (IgnoreForFixedLevel("SetVolume")) return;
       SetLevelDb(GenelecSmartIpVolumeScaling.ToDb(level, config.VolumeMinDb, config.VolumeMaxDb));
+    }
+
+    /// <summary>
+    /// True (and logged) when fixedLevelDb is set, so volume commands are dropped instead of fighting it
+    /// </summary>
+    private bool IgnoreForFixedLevel(string command)
+    {
+      if (!fixedLevelDb.HasValue) return false;
+      this.LogDebug("{Command} ignored: level is fixed at {Level} dB (fixedLevelDb)", command, fixedLevelDb.Value);
+      return true;
+    }
+
+    /// <summary>
+    /// Puts the speaker back to fixedLevelDb when the polled level differs (or is missing)
+    /// </summary>
+    private async Task EnforceFixedLevelAsync(JObject vol, double target)
+    {
+      var lvl = vol["level"];
+      var current = lvl != null && lvl.Type != JTokenType.Null ? (double?)(double)lvl : null;
+      if (current.HasValue && !GenelecSmartIpVolumeScaling.NeedsFixedLevel(current.Value, target)) return;
+
+      this.LogInformation("Applying fixed level {Level} dB (speaker reported {Current})",
+          target, current.HasValue ? current.Value.ToString("0.0") : "no level");
+
+      if (await rest.PutAsync("/audio/volume", new { level = target }).ConfigureAwait(false))
+      {
+        levelDb = target;
+        VolumeLevelFeedback.FireUpdate();
+      }
+      // on failure the next poll tries again
     }
 
     private void SetLevelDb(double db)
@@ -374,6 +423,7 @@ namespace PepperDash.Essentials.Plugins
       {
         StopRamp();
         if (!press) return;
+        if (IgnoreForFixedLevel(stepDb > 0 ? "VolumeUp" : "VolumeDown")) return;
 
         Interlocked.Exchange(ref rampSteps, 1);
         rampTimer = new Timer(_ =>

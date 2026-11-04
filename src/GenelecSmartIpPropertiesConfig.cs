@@ -96,6 +96,15 @@ namespace PepperDash.Essentials.Plugins
     public int VolumeRampIntervalMs { get; set; } = 250;
 
     /// <summary>
+    /// Optional fixed ("set and forget") level in dB, -200.0..0.0. When set, the plugin applies this level
+    /// whenever the speaker is ACTIVE and its level differs (startup, comms recovery, wake from standby, or a
+    /// change made at the speaker), and ignores volume set/up/down commands. Mute is unaffected.
+    /// Omit (or null) to leave volume under normal control
+    /// </summary>
+    [JsonProperty("fixedLevelDb")]
+    public double? FixedLevelDb { get; set; }
+
+    /// <summary>
     /// Selectable inputs keyed by item key. If omitted/empty the defaults below are used
     /// </summary>
     [JsonProperty("inputs")]
