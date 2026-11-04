@@ -38,6 +38,7 @@ namespace PepperDash.Essentials.Plugins
     private readonly GenelecSmartIpCommunicationMonitor monitor;
     private readonly object stateLock = new object();
     private readonly double? fixedLevelDb;
+    private readonly GenelecSmartIpLatestValueSender<double> levelSender;
 
     private Timer pollTimer;
     private Timer rampTimer;
@@ -60,6 +61,10 @@ namespace PepperDash.Essentials.Plugins
 
       rest = new GenelecSmartIpRestClient(this, config.Host, config.Port, config.Username, config.Password, config.RequestTimeoutMs);
       monitor = new GenelecSmartIpCommunicationMonitor(this);
+      // volume writes: latest value wins, one request in flight
+      levelSender = new GenelecSmartIpLatestValueSender<double>(
+          db => rest.PutAsync("/audio/volume", new { level = db }),
+          ex => this.LogError(ex, "Volume send failed: {Message}", ex.Message));
 
       levelDb = config.VolumeMinDb;
 
@@ -203,9 +208,11 @@ namespace PepperDash.Essentials.Plugins
       if (powerState != StateActive) return;
 
       var vol = await rest.GetAsync("/audio/volume").ConfigureAwait(false);
-      if (vol != null && Volatile.Read(ref rampSteps) == 0)
+      if (vol != null)
       {
-        ApplyVolume(vol);
+        // while ramping or a level write is queued the polled level is older than ours; keep ours
+        var levelSettled = Volatile.Read(ref rampSteps) == 0 && !levelSender.IsBusy;
+        ApplyVolume(vol, levelSettled);
       }
 
       if (vol != null && fixedLevelDb.HasValue)
@@ -290,10 +297,10 @@ namespace PepperDash.Essentials.Plugins
       PowerIsOffFeedback.FireUpdate();
     }
 
-    private void ApplyVolume(JObject vol)
+    private void ApplyVolume(JObject vol, bool applyLevel)
     {
       var lvl = vol["level"];
-      if (lvl != null && lvl.Type != JTokenType.Null)
+      if (applyLevel && lvl != null && lvl.Type != JTokenType.Null)
       {
         levelDb = (double)lvl;
         VolumeLevelFeedback.FireUpdate();
@@ -402,7 +409,7 @@ namespace PepperDash.Essentials.Plugins
       db = GenelecSmartIpVolumeScaling.Clamp(db, config.VolumeMinDb, config.VolumeMaxDb);
       levelDb = db;
       VolumeLevelFeedback.FireUpdate();
-      Task.Run(() => rest.PutAsync("/audio/volume", new { level = db }));
+      levelSender.Post(db);
     }
 
     /// <inheritdoc />
