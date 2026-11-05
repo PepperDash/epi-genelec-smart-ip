@@ -37,6 +37,8 @@ namespace PepperDash.Essentials.Plugins
     private readonly List<GenelecSmartIpInputItem> inputOrder = new List<GenelecSmartIpInputItem>();
     private readonly GenelecSmartIpCommunicationMonitor monitor;
     private readonly object stateLock = new object();
+    private readonly object levelLock = new object();   // level writes vs. applying a polled level
+    private int levelWriteGeneration;                  // bumped by every level write (under levelLock)
     private readonly double? fixedLevelDb;
     private readonly GenelecSmartIpLatestValueSender<double> levelSender;
     private GenelecSmartIpInputItem fixedInputItem;
@@ -177,6 +179,13 @@ namespace PepperDash.Essentials.Plugins
     /// </summary>
     public int? MulticastPort { get; private set; }
 
+    /// <summary>
+    /// Raised after every successful GET /audio/volume, including when nothing changed, once <see cref="LevelDb"/>
+    /// and MuteFeedback hold what the speaker reported. Feedback change events can't tell a real report from a
+    /// constructor default or a value that happens to equal it, so the multicast group learns from this instead
+    /// </summary>
+    public event EventHandler<GenelecSmartIpVolumeReportEventArgs> VolumeReported;
+
     #endregion
 
     #region Lifecycle
@@ -230,12 +239,20 @@ namespace PepperDash.Essentials.Plugins
 
       if (powerState != StateActive) return;
 
+      // A level write queued, in flight or started while this GET runs makes the polled level older than ours.
+      // Snapshot before the GET; ApplyVolume re-checks under levelLock, the same lock SetLevelDb takes.
+      int writeGeneration;
+      bool settledBefore;
+      lock (levelLock)
+      {
+        writeGeneration = levelWriteGeneration;
+        settledBefore = LevelSettledLocked();
+      }
+
       var vol = await rest.GetAsync("/audio/volume").ConfigureAwait(false);
       if (vol != null)
       {
-        // while ramping or a level write is queued the polled level is older than ours; keep ours
-        var levelSettled = Volatile.Read(ref rampSteps) == 0 && !levelSender.IsBusy;
-        ApplyVolume(vol, levelSettled);
+        ApplyVolume(vol, settledBefore, writeGeneration);
       }
 
       if (vol != null && fixedLevelDb.HasValue)
@@ -337,21 +354,42 @@ namespace PepperDash.Essentials.Plugins
       PowerIsOffFeedback.FireUpdate();
     }
 
-    private void ApplyVolume(JObject vol, bool applyLevel)
+    private void ApplyVolume(JObject vol, bool settledBefore, int writeGeneration)
     {
       var lvl = vol["level"];
-      if (applyLevel && lvl != null && lvl.Type != JTokenType.Null)
+      var levelApplied = false;
+      if (lvl != null && lvl.Type != JTokenType.Null)
       {
-        levelDb = (double)lvl;
-        VolumeLevelFeedback.FireUpdate();
+        lock (levelLock)
+        {
+          // keep ours if a write was pending before the GET, or started (or finished) while it ran
+          if (settledBefore && writeGeneration == levelWriteGeneration && LevelSettledLocked())
+          {
+            levelDb = (double)lvl;
+            levelApplied = true;
+          }
+        }
+        // outside the lock: handlers (e.g. a group) may take their own locks and call back into SetVolume
+        if (levelApplied) VolumeLevelFeedback.FireUpdate();
       }
 
       var mute = vol["mute"];
-      if (mute != null && mute.Type == JTokenType.Boolean)
+      var muteApplied = mute != null && mute.Type == JTokenType.Boolean;
+      if (muteApplied)
       {
         muted = (bool)mute;
         FireMuteFeedbacks();
       }
+
+      var handler = VolumeReported;
+      if (handler != null && (levelApplied || muteApplied))
+        handler(this, new GenelecSmartIpVolumeReportEventArgs(levelApplied, muteApplied));
+    }
+
+    /// <summary>No ramp running and no level write queued or in flight. Call under levelLock</summary>
+    private bool LevelSettledLocked()
+    {
+      return Volatile.Read(ref rampSteps) == 0 && !levelSender.IsBusy;
     }
 
     private void ApplyInputs(JObject inp)
@@ -447,9 +485,14 @@ namespace PepperDash.Essentials.Plugins
     private void SetLevelDb(double db)
     {
       db = GenelecSmartIpVolumeScaling.Clamp(db, config.VolumeMinDb, config.VolumeMaxDb);
-      levelDb = db;
+      lock (levelLock)
+      {
+        // a poll whose GET overlaps this write sees a new generation (or a busy sender) and drops its level
+        levelWriteGeneration++;
+        levelDb = db;
+        levelSender.Post(db);
+      }
       VolumeLevelFeedback.FireUpdate();
-      levelSender.Post(db);
     }
 
     /// <inheritdoc />

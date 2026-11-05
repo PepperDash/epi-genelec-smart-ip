@@ -332,17 +332,20 @@ namespace PepperDash.Essentials.Plugins
     {
       EventHandler<FeedbackEventArgs> level = (s, e) => MemberLevelChanged(member);
       EventHandler<FeedbackEventArgs> mute = (s, e) => MemberMuteChanged(member);
+      EventHandler<GenelecSmartIpVolumeReportEventArgs> report = (s, e) => MemberReported(member, e);
       EventHandler<FeedbackEventArgs> power = (s, e) => { if (member == source) PowerIsOnFeedback.FireUpdate(); };
       DeviceInfoChangeHandler info = (s, e) => CheckMembership(member);
 
       member.VolumeLevelFeedback.OutputChange += level;
       member.MuteFeedback.OutputChange += mute;
+      member.VolumeReported += report;
       member.PowerIsOnFeedback.OutputChange += power;
       member.DeviceInfoChanged += info;
       unsubscribe.Add(() =>
       {
         member.VolumeLevelFeedback.OutputChange -= level;
         member.MuteFeedback.OutputChange -= mute;
+        member.VolumeReported -= report;
         member.PowerIsOnFeedback.OutputChange -= power;
         member.DeviceInfoChanged -= info;
       });
@@ -350,18 +353,39 @@ namespace PepperDash.Essentials.Plugins
       if (member.MulticastAddress != null) CheckMembership(member);   // device info already read
     }
 
-    /// <summary>A member's level changed: learn it from the source if the group doesn't know its level yet</summary>
-    private void MemberLevelChanged(GenelecSmartIpDevice member)
+    /// <summary>
+    /// The source completed a volume poll: learn whatever the group doesn't know yet from what the speaker reported.
+    /// Only real reports teach the group, never a constructor default or a feedback refresh (e.g. a bridge link),
+    /// and a report that equals the default still counts
+    /// </summary>
+    private void MemberReported(GenelecSmartIpDevice member, GenelecSmartIpVolumeReportEventArgs e)
     {
       lock (sync)
       {
         if (!active || member != source) return;
-        if (!levelKnown)
+        if (!levelKnown && e.LevelReported)
         {
           levelDb = GenelecSmartIpMulticast.ClampDb(member.LevelDb);
           levelKnown = true;
           this.LogInformation("Learned level {Level} dB from {Source}", levelDb, member.Key);
+          VolumeLevelFeedback.FireUpdate();
         }
+        if (!muteKnown && e.MuteReported)
+        {
+          muted = member.MuteFeedback.BoolValue;
+          muteKnown = true;
+          this.LogInformation("Learned mute {Mute} from {Source}", muted, member.Key);
+          MuteFeedback.FireUpdate();
+        }
+      }
+    }
+
+    /// <summary>Until the group knows its level, its feedback mirrors the source's: pass changes through</summary>
+    private void MemberLevelChanged(GenelecSmartIpDevice member)
+    {
+      lock (sync)
+      {
+        if (!active || member != source || levelKnown) return;
         VolumeLevelFeedback.FireUpdate();
       }
     }
@@ -370,13 +394,7 @@ namespace PepperDash.Essentials.Plugins
     {
       lock (sync)
       {
-        if (!active || member != source) return;
-        if (!muteKnown)
-        {
-          muted = member.MuteFeedback.BoolValue;
-          muteKnown = true;
-          this.LogInformation("Learned mute {Mute} from {Source}", muted, member.Key);
-        }
+        if (!active || member != source || muteKnown) return;
         MuteFeedback.FireUpdate();
       }
     }

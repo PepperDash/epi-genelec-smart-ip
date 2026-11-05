@@ -181,4 +181,13 @@ public class MulticastTests
   {
     PluginType("GenelecSmartIpDevice").GetProperty(property).Should().NotBeNull();
   }
+
+  [Fact]
+  public void Speaker_Raises_VolumeReported_For_The_Group_To_Learn_From()
+  {
+    PluginType("GenelecSmartIpDevice").GetEvent("VolumeReported").Should().NotBeNull();
+    var args = PluginType("GenelecSmartIpVolumeReportEventArgs");
+    args.GetProperty("LevelReported").Should().NotBeNull();
+    args.GetProperty("MuteReported").Should().NotBeNull();
+  }
 }

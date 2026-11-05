@@ -360,8 +360,8 @@ a warning is logged). A `muteGroup` member keeps `fixedLevelDb`, which is the po
 * **Volume:** `{"mcast":{"ver":1,"level":-30.0}}` to the volume group. Volume up/down ramp at group level.
 * **Mute:** `{"mcast":{"ver":1,"mute":true}}` to both groups.
 * **Power:** off sends `STANDBY`, on sends `BOOT` (multicast has no ACTIVE; the speakers reboot to wake, up to a minute), to both groups.
-* **Startup:** level and mute are learned from the first volume member's own reports; nothing is sent from a
-  placeholder. Until then the group's feedback shows that speaker's current value, set/on/off commands work,
+* **Startup:** level and mute are learned from the first volume member's first successful volume poll (even
+  when the speaker's values equal the defaults); nothing is sent from a placeholder. Until then the group's feedback shows that speaker's current value, set/on/off commands work,
   and volume up/down and mute toggle are ignored.
 * **Repair:** once a command has settled, members' polled values are compared with the group every 2 s. A
   member that missed a message (lost datagram) gets it re-sent to its group. Members offline or in standby are
