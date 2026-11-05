@@ -27,7 +27,7 @@ Mobile control messengers are created automatically for the supported capabiliti
 | Device info | `IDeviceInfoProvider` | `GET /device/id`, `/device/info`, `/network/ipv4` (read once while ACTIVE, re-read after comms loss) |
 | SIMPL bridge | `IBridgeAdvanced` | |
 
-Two ways to deploy: control each speaker directly (`genelecSmartIp`), or control them as one group through the multicast API (`genelecSmartIpMulticastGroup`, see [Multicast group](#multicast-group-genelecsmartipmulticastgroup)).
+The plugin has two device types, which can be used alone or together. See [Ways to deploy](#ways-to-deploy).
 
 Not implemented: mDNS discovery, profiles, LED, diagnostics (`/events`), network configuration writes, multicast profile selection.
 
@@ -35,6 +35,98 @@ Notes from the API guide:
 * The speaker allows 4 simultaneous connections. The plugin serializes requests and sends `Connection: close`.
 * Do not use Smart IP Manager/Configurator at the same time as API control.
 * In STANDBY / ISS_SLEEP the speaker does not answer all requests; only `/device/pwr` is polled while not ACTIVE. Sending `ACTIVE` always wakes it.
+
+## Ways to deploy
+
+| Device type | Talks to | What it is |
+|---|---|---|
+| `genelecSmartIp` | one speaker, unicast REST (TCP 9000) | Control **and** feedback for one speaker: level, mute, power, input, online status, device info |
+| `genelecSmartIpMulticastGroup` | every speaker on a multicast address, UDP | Sends level, mute and power to all of them at once. **Send only:** the multicast API never replies |
+
+The two types are independent. Four common layouts:
+
+| # | Config | Room volume device (`defaultAudioKey`) | Use when |
+|---|---|---|---|
+| A | `genelecSmartIp` per speaker, no group | one speaker, or something that drives the others (e.g. a codec with followers) | One speaker, or speakers controlled separately |
+| B | Group only, `members: []`, no `genelecSmartIp` devices | the group | Simplest one-control room, and no feedback or repair is acceptable |
+| C | Group **plus** a `genelecSmartIp` per speaker, listed in `members` | the group | **Recommended** for one-control rooms: one command for all speakers, with feedback, repair and health |
+| D | Group plus `genelecSmartIp` devices, only some listed in `members` | the group | Some speakers need their own device (e.g. `fixedInput`, health tab) but shouldn't drive group feedback |
+
+What each layout gives you:
+
+| | A: speakers only | B: group only | C: group + listed speakers | D: mixed |
+|---|---|---|---|---|
+| One command reaches every speaker | no (one device per speaker) | yes | yes | yes |
+| Volume / mute feedback | real, per speaker | last value sent; level shows the top of the range until the first `SetVolume` | real, from the first `volumeGroup` member | real, from the first listed `volumeGroup` member |
+| Volume up/down, mute toggle | yes | after the first `SetVolume` / `MuteOn` / `MuteOff` | yes, once the first member reports | as C |
+| Power feedback / toggle | yes | always off, so toggle always wakes (`BOOT` reboots the speakers) | yes, from the first `volumeGroup` member | as C |
+| Repair of a missed message | n/a (unicast) | no | yes | listed members only |
+| Online status, device info, health | yes | no | yes | for each configured speaker |
+| Commissioning check (`volIp` / `volPort`) | no | no | yes | listed members only |
+| `fixedLevelDb`, `fixedInput` enforced | yes | no (needs a speaker device) | yes | for each configured speaker |
+| Mobile Control / SIMPL bridge | per speaker | Mobile Control volume; no SIMPL bridge yet | as A and B | as A and B |
+
+Rules that apply to every layout:
+* **The speaker decides what it hears, not the config.** A speaker obeys every multicast message sent to its
+  `volIp` / `volPort` (set in Smart IP Manager), whether or not it appears in any `members` list or has a
+  `genelecSmartIp` device. `members` only tells the group which devices to read feedback from, repair and check.
+* **A `genelecSmartIp` device still works on its own** while it is a group member. Commands sent straight to it
+  (from its own bridge or Mobile Control) change only that speaker, and the group repairs the difference
+  back a few seconds later.
+* **A speaker device can't be the group.** Don't point `defaultAudioKey` at one speaker and expect the others
+  to follow over multicast: only the group sends multicast.
+
+### A: speakers only
+
+```json
+{ "key": "genelec-front-left",  "type": "genelecSmartIp", "properties": { "host": "10.0.0.51" } },
+{ "key": "genelec-front-right", "type": "genelecSmartIp", "properties": { "host": "10.0.0.52" } },
+{ "key": "genelec-subwoofer",   "type": "genelecSmartIp", "properties": { "host": "10.0.0.53", "fixedLevelDb": -12 } }
+```
+
+Each device controls one speaker. To drive several from one control, something above the plugin has to
+send to each of them (for example a room plugin with codec followers).
+
+### B: group only
+
+```json
+{
+  "key": "room-audio", "type": "genelecSmartIpMulticastGroup",
+  "properties": {
+    "volumeGroup": { "address": "239.10.10.1", "port": 49152, "members": [] },
+    "muteGroup":   { "address": "239.10.10.2", "port": 49153, "members": [] }
+  }
+}
+```
+
+No speaker devices. The group logs a warning at startup that it has no feedback. Send `SetVolume` and
+`MuteOn`/`MuteOff` (rather than relying on up/down and toggle) until the first command has set a value. The
+sub's level is whatever was last set on it, e.g. in Smart IP Manager, since nothing enforces `fixedLevelDb`.
+
+### C: group plus listed speakers (recommended)
+
+```json
+{ "key": "genelec-front-left",  "type": "genelecSmartIp", "properties": { "host": "10.0.0.51" } },
+{ "key": "genelec-front-right", "type": "genelecSmartIp", "properties": { "host": "10.0.0.52" } },
+{ "key": "genelec-subwoofer",   "type": "genelecSmartIp", "properties": { "host": "10.0.0.53", "fixedLevelDb": -12 } },
+{
+  "key": "room-audio", "type": "genelecSmartIpMulticastGroup",
+  "properties": {
+    "volumeGroup": { "address": "239.10.10.1", "port": 49152, "members": [ "genelec-front-left", "genelec-front-right" ] },
+    "muteGroup":   { "address": "239.10.10.2", "port": 49153, "members": [ "genelec-subwoofer" ] }
+  }
+}
+```
+
+The room points `defaultAudioKey` at `room-audio`. The speaker devices can also go in the room's
+accessory/health list. Startup, feedback and repair are described in [Behaviour](#behaviour).
+
+### D: mixed
+
+Same as C, but a configured speaker is left out of `members`, for example a speaker kept only so its
+`fixedInput` is enforced, or one on a different multicast address that this group shouldn't check. It
+still hears the group if its `volIp` / `volPort` match, but the group doesn't read its feedback or repair it.
+Prefer C unless you have a reason to leave one out.
 
 ## Configuration
 
@@ -228,8 +320,9 @@ and a port in 49152-65535. The network must pass multicast between the processor
 network segment, IGMP snooping with a querier on the switches).
 
 ### Config
-Keep a `genelecSmartIp` device for every speaker: the multicast API has no replies, so these devices provide
-feedback, online status and repair. Then add the group:
+The multicast API has no replies, so feedback, online status and repair come from `genelecSmartIp` devices
+listed in `members`. Listing every speaker is recommended (layout C). `members` can also be empty (layout B),
+see [Ways to deploy](#ways-to-deploy) for what that gives up. A full example:
 
 ```json
 {
@@ -250,7 +343,7 @@ feedback, online status and repair. Then add the group:
 
 | Property | Default | Notes |
 |---|---|---|
-| `volumeGroup` | required | `address`, `port`, `members` (keys of `genelecSmartIp` devices on this group) |
+| `volumeGroup` | required | `address`, `port`, `members` (keys of `genelecSmartIp` devices on this group; optional, may be empty) |
 | `muteGroup` | not set | Same shape. Mute and power only |
 | `volumeMinDb` / `volumeMaxDb` | -60 / 0 | dB range mapped to the group's 0-65535 volume; clamped to the multicast range -130..0 |
 | `volumeStepDb` / `volumeRampIntervalMs` | 1.0 / 250 | Volume up/down ramp |
@@ -325,7 +418,7 @@ Limits: the multicast API itself returns nothing, so feedback is only as fresh a
 ## Supported Types
 
 * `genelecSmartIp`: one speaker, unicast REST API
-* `genelecSmartIpMulticastGroup`: several speakers as one group, multicast API
+* `genelecSmartIpMulticastGroup`: several speakers as one group, multicast API (alone or with `genelecSmartIp` members, see [Ways to deploy](#ways-to-deploy))
 
 ## Building
 
