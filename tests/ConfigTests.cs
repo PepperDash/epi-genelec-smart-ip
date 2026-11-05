@@ -28,6 +28,7 @@ public class ConfigTests
   [InlineData("volumeRampIntervalMs")]
   [InlineData("inputs")]
   [InlineData("fixedLevelDb")]
+  [InlineData("fixedInput")]
   public void Config_Property_Has_JsonPropertyAttribute(string jsonName)
   {
     var has = ConfigType.GetProperties().Any(p => p.CustomAttributes.Any(a =>
@@ -70,6 +71,17 @@ public class ConfigTests
     var src = AssemblyFixture.FindSourceForClass("GenelecSmartIpPropertiesConfig")!;
     src.Should().Contain("public double? FixedLevelDb { get; set; }").And.NotContain("FixedLevelDb { get; set; } =");
     src.Should().NotContain("Required.Always");
+  }
+
+  [Fact]
+  public void FixedInput_Is_Optional()
+  {
+    var prop = ConfigType.GetProperty("FixedInput")!;
+    prop.Should().NotBeNull();
+    prop.PropertyType.FullName.Should().Be("System.String");
+
+    var src = AssemblyFixture.FindSourceForClass("GenelecSmartIpPropertiesConfig")!;
+    src.Should().Contain("public string FixedInput { get; set; }").And.NotContain("FixedInput { get; set; } =");
   }
 
   [Fact]

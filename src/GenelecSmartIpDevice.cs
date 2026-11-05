@@ -37,7 +37,12 @@ namespace PepperDash.Essentials.Plugins
     private readonly List<GenelecSmartIpInputItem> inputOrder = new List<GenelecSmartIpInputItem>();
     private readonly GenelecSmartIpCommunicationMonitor monitor;
     private readonly object stateLock = new object();
+    private readonly object levelLock = new object();   // level writes vs. applying a polled level
+    private int levelWriteGeneration;                  // bumped by every level write (under levelLock)
     private readonly double? fixedLevelDb;
+    private readonly GenelecSmartIpLatestValueSender<double> levelSender;
+    private GenelecSmartIpInputItem fixedInputItem;
+    private bool fixedInputCorrecting;
 
     private Timer pollTimer;
     private Timer rampTimer;
@@ -60,6 +65,10 @@ namespace PepperDash.Essentials.Plugins
 
       rest = new GenelecSmartIpRestClient(this, config.Host, config.Port, config.Username, config.Password, config.RequestTimeoutMs);
       monitor = new GenelecSmartIpCommunicationMonitor(this);
+      // volume writes: latest value wins, one request in flight
+      levelSender = new GenelecSmartIpLatestValueSender<double>(
+          db => rest.PutAsync("/audio/volume", new { level = db }),
+          ex => this.LogError(ex, "Volume send failed: {Message}", ex.Message));
 
       levelDb = config.VolumeMinDb;
 
@@ -93,6 +102,7 @@ namespace PepperDash.Essentials.Plugins
       ModelFeedback = new StringFeedback("Model", () => model);
 
       BuildInputs();
+      ResolveFixedInput();
 
       inputs.CurrentItemChanged += (s, e) =>
       {
@@ -149,6 +159,33 @@ namespace PepperDash.Essentials.Plugins
     /// <inheritdoc />
     public event DeviceInfoChangeHandler DeviceInfoChanged;
 
+    /// <summary>
+    /// Last level (dB) read from or sent to the speaker. Used by the multicast group to compare members
+    /// </summary>
+    public double LevelDb { get { return levelDb; } }
+
+    /// <summary>
+    /// True when fixedLevelDb is set: the speaker ignores volume commands and puts its level back each poll
+    /// </summary>
+    public bool HasFixedLevel { get { return fixedLevelDb.HasValue; } }
+
+    /// <summary>
+    /// The speaker's multicast group address (volIp from GET /network/ipv4), or null until device info is read
+    /// </summary>
+    public string MulticastAddress { get; private set; }
+
+    /// <summary>
+    /// The speaker's multicast group port (volPort from GET /network/ipv4), or null until device info is read
+    /// </summary>
+    public int? MulticastPort { get; private set; }
+
+    /// <summary>
+    /// Raised after every successful GET /audio/volume, including when nothing changed, once <see cref="LevelDb"/>
+    /// and MuteFeedback hold what the speaker reported. Feedback change events can't tell a real report from a
+    /// constructor default or a value that happens to equal it, so the multicast group learns from this instead
+    /// </summary>
+    public event EventHandler<GenelecSmartIpVolumeReportEventArgs> VolumeReported;
+
     #endregion
 
     #region Lifecycle
@@ -202,10 +239,20 @@ namespace PepperDash.Essentials.Plugins
 
       if (powerState != StateActive) return;
 
-      var vol = await rest.GetAsync("/audio/volume").ConfigureAwait(false);
-      if (vol != null && Volatile.Read(ref rampSteps) == 0)
+      // A level write queued, in flight or started while this GET runs makes the polled level older than ours.
+      // Snapshot before the GET; ApplyVolume re-checks under levelLock, the same lock SetLevelDb takes.
+      int writeGeneration;
+      bool settledBefore;
+      lock (levelLock)
       {
-        ApplyVolume(vol);
+        writeGeneration = levelWriteGeneration;
+        settledBefore = LevelSettledLocked();
+      }
+
+      var vol = await rest.GetAsync("/audio/volume").ConfigureAwait(false);
+      if (vol != null)
+      {
+        ApplyVolume(vol, settledBefore, writeGeneration);
       }
 
       if (vol != null && fixedLevelDb.HasValue)
@@ -215,6 +262,11 @@ namespace PepperDash.Essentials.Plugins
 
       var inp = await rest.GetAsync("/audio/inputs").ConfigureAwait(false);
       if (inp != null) ApplyInputs(inp);
+
+      if (inp != null && fixedInputItem != null)
+      {
+        await EnforceFixedInputAsync(inp, fixedInputItem).ConfigureAwait(false);
+      }
 
       if (Volatile.Read(ref deviceInfoStale) == 1)
       {
@@ -265,7 +317,19 @@ namespace PepperDash.Essentials.Plugins
       };
 
       model = (string)id["model"] ?? (string)info["model"] ?? string.Empty;
-      Interlocked.Exchange(ref deviceInfoStale, 0);
+
+      // multicast group membership, for the multicast group device's commissioning check (only these two
+      // fields are kept from the response; its credentials are never stored or logged)
+      if (net != null)
+      {
+        MulticastAddress = (string)net["volIp"];
+        var port = net["volPort"];
+        MulticastPort = port != null && (port.Type == JTokenType.Integer || port.Type == JTokenType.Float)
+            ? (int?)(int)port
+            : null;
+      }
+
+      Interlocked.Exchange(ref deviceInfoStale, net == null ? 1 : 0);
 
       this.LogInformation("Device info: model {Model}, serial {Serial}, firmware {Firmware}, API {ApiVer}",
           model, DeviceInfo.SerialNumber, DeviceInfo.FirmwareVersion, (string)info["apiVer"]);
@@ -290,21 +354,42 @@ namespace PepperDash.Essentials.Plugins
       PowerIsOffFeedback.FireUpdate();
     }
 
-    private void ApplyVolume(JObject vol)
+    private void ApplyVolume(JObject vol, bool settledBefore, int writeGeneration)
     {
       var lvl = vol["level"];
+      var levelApplied = false;
       if (lvl != null && lvl.Type != JTokenType.Null)
       {
-        levelDb = (double)lvl;
-        VolumeLevelFeedback.FireUpdate();
+        lock (levelLock)
+        {
+          // keep ours if a write was pending before the GET, or started (or finished) while it ran
+          if (settledBefore && writeGeneration == levelWriteGeneration && LevelSettledLocked())
+          {
+            levelDb = (double)lvl;
+            levelApplied = true;
+          }
+        }
+        // outside the lock: handlers (e.g. a group) may take their own locks and call back into SetVolume
+        if (levelApplied) VolumeLevelFeedback.FireUpdate();
       }
 
       var mute = vol["mute"];
-      if (mute != null && mute.Type == JTokenType.Boolean)
+      var muteApplied = mute != null && mute.Type == JTokenType.Boolean;
+      if (muteApplied)
       {
         muted = (bool)mute;
         FireMuteFeedbacks();
       }
+
+      var handler = VolumeReported;
+      if (handler != null && (levelApplied || muteApplied))
+        handler(this, new GenelecSmartIpVolumeReportEventArgs(levelApplied, muteApplied));
+    }
+
+    /// <summary>No ramp running and no level write queued or in flight. Call under levelLock</summary>
+    private bool LevelSettledLocked()
+    {
+      return Volatile.Read(ref rampSteps) == 0 && !levelSender.IsBusy;
     }
 
     private void ApplyInputs(JObject inp)
@@ -400,9 +485,14 @@ namespace PepperDash.Essentials.Plugins
     private void SetLevelDb(double db)
     {
       db = GenelecSmartIpVolumeScaling.Clamp(db, config.VolumeMinDb, config.VolumeMaxDb);
-      levelDb = db;
+      lock (levelLock)
+      {
+        // a poll whose GET overlaps this write sees a new generation (or a busy sender) and drops its level
+        levelWriteGeneration++;
+        levelDb = db;
+        levelSender.Post(db);
+      }
       VolumeLevelFeedback.FireUpdate();
-      Task.Run(() => rest.PutAsync("/audio/volume", new { level = db }));
     }
 
     /// <inheritdoc />
@@ -524,8 +614,72 @@ namespace PepperDash.Essentials.Plugins
       SelectInput(inputOrder[index - 1]);
     }
 
+    /// <summary>
+    /// Resolves fixedInput against the configured input items; a key that names no item is ignored
+    /// </summary>
+    private void ResolveFixedInput()
+    {
+      bool notFound;
+      var key = GenelecSmartIpInputMatch.ResolveKey(config.FixedInput, inputOrder.Select(i => i.Key), out notFound);
+      if (notFound)
+      {
+        this.LogWarning("fixedInput '{FixedInput}' is not one of the configured inputs ({Keys}); ignoring it, inputs stay under normal control",
+            config.FixedInput, string.Join(", ", inputOrder.Select(i => i.Key)));
+        return;
+      }
+      if (key == null) return;
+
+      var item = inputOrder.First(i => i.Key == key);
+      var invalid = GenelecSmartIpInputMatch.InvalidInputNames(item.SmartIpInputs);
+      if (invalid.Count > 0)
+      {
+        // a PUT with these would fail on every poll; reject up front like an unknown key
+        this.LogWarning("fixedInput '{Key}' has invalid input name(s) {Invalid} (valid: {Valid}); ignoring it, inputs stay under normal control",
+            key, string.Join(", ", invalid), string.Join(", ", GenelecSmartIpInputMatch.ValidInputNames));
+        return;
+      }
+
+      fixedInputItem = item;
+      this.LogInformation("Input fixed to {Key} ({Inputs}) (fixedInput); input-select commands will be ignored",
+          fixedInputItem.Key, string.Join("+", fixedInputItem.SmartIpInputs));
+    }
+
+    /// <summary>
+    /// Puts the speaker back on the fixed input when the polled input set differs
+    /// </summary>
+    private async Task EnforceFixedInputAsync(JObject inp, GenelecSmartIpInputItem item)
+    {
+      var arr = inp["input"] as JArray;
+      var current = arr != null ? arr.Select(t => (string)t).ToList() : new List<string>();
+      if (GenelecSmartIpInputMatch.SameSet(current, item.SmartIpInputs))
+      {
+        fixedInputCorrecting = false;
+        return;
+      }
+
+      // Information on the first correction after the speaker was matching; Debug while it keeps
+      // retrying (e.g. the speaker accepts the PUT but doesn't change), so the log doesn't flood
+      var reported = current.Count > 0 ? string.Join("+", current) : "none";
+      if (!fixedInputCorrecting)
+        this.LogInformation("Applying fixed input {Key} ({Inputs}); speaker reported {Current}",
+            item.Key, string.Join("+", item.SmartIpInputs), reported);
+      else
+        this.LogDebug("Still applying fixed input {Key}; speaker reported {Current}", item.Key, reported);
+      fixedInputCorrecting = true;
+
+      // Feedback stays driven by the inputs GET: a speaker can acknowledge the PUT without changing,
+      // so CurrentItem is not set here. The next poll confirms the correction (or retries it).
+      await rest.PutAsync("/audio/inputs", new { input = item.SmartIpInputs }).ConfigureAwait(false);
+    }
+
     private void SelectInput(GenelecSmartIpInputItem item)
     {
+      if (fixedInputItem != null)
+      {
+        this.LogDebug("Input select {Key} ignored: input is fixed to {Fixed} (fixedInput)", item.Key, fixedInputItem.Key);
+        return;
+      }
+
       Task.Run(async () =>
       {
         if (await rest.PutAsync("/audio/inputs", new { input = item.SmartIpInputs }).ConfigureAwait(false))
