@@ -21,6 +21,10 @@ namespace PepperDash.Essentials.Plugins
   /// settles, members' polled values are compared with the group and a value a member missed (lost datagram) is
   /// re-sent to that member's group.
   /// </para>
+  /// <para>
+  /// With no volume members, feedback is what the group last sent: level starts at the bottom of the range and
+  /// power at off, and power toggle (like volume up/down and mute toggle) waits until the group has sent a value.
+  /// </para>
   /// </summary>
   public class GenelecSmartIpMulticastGroup : EssentialsDevice, IBasicVolumeWithFeedback, IHasPowerControlWithFeedback
   {
@@ -46,6 +50,8 @@ namespace PepperDash.Essentials.Plugins
     private bool muted;
     private bool levelKnown;
     private bool muteKnown;
+    private bool powerKnown;   // the group has sent a power command (used only with no volume members)
+    private bool poweredOn;
     private DateTime lastCommandUtc = DateTime.MinValue;
 
     private Timer rampTimer;
@@ -62,6 +68,7 @@ namespace PepperDash.Essentials.Plugins
       this.config = config;
       minDb = Math.Max(GenelecSmartIpMulticast.MinDb, Math.Min(config.VolumeMinDb, config.VolumeMaxDb));
       maxDb = Math.Min(GenelecSmartIpMulticast.MaxDb, Math.Max(config.VolumeMinDb, config.VolumeMaxDb));
+      levelDb = minDb;   // with no member to read from, never show a full-scale level before the first command
 
       volumeTarget = new IPEndPoint(IPAddress.Parse(config.VolumeGroup.Address.Trim()), config.VolumeGroup.Port);
       if (config.MuteGroup != null)
@@ -72,7 +79,8 @@ namespace PepperDash.Essentials.Plugins
           GenelecSmartIpVolumeScaling.ToScaled(levelKnown || source == null ? levelDb : source.LevelDb, minDb, maxDb));
       MuteFeedback = new BoolFeedback(key + "-mute", () =>
           muteKnown || source == null ? muted : source.MuteFeedback.BoolValue);
-      PowerIsOnFeedback = new BoolFeedback(key + "-power", () => source != null && source.PowerIsOnFeedback.BoolValue);
+      PowerIsOnFeedback = new BoolFeedback(key + "-power", () =>
+          source != null ? source.PowerIsOnFeedback.BoolValue : powerKnown && poweredOn);
     }
 
     /// <inheritdoc />
@@ -117,7 +125,8 @@ namespace PepperDash.Essentials.Plugins
         volumeMembers = vol;
         muteMembers = mute;
         source = vol.FirstOrDefault();
-        levelKnown = muteKnown = false;
+        levelKnown = muteKnown = powerKnown = false;
+        levelDb = minDb;
         warnedMembers.Clear();
         active = true;
 
@@ -132,7 +141,8 @@ namespace PepperDash.Essentials.Plugins
       this.LogInformation("Multicast group: volume {Volume} ({VolumeMembers}); mute {Mute} ({MuteMembers}); range {Min}..{Max} dB",
           volumeTarget, Describe(vol), muteTarget != null ? muteTarget.ToString() : "none", Describe(mute), minDb, maxDb);
       if (source == null)
-        this.LogWarning("volumeGroup has no genelecSmartIp members: the group has no feedback, and volume up/down and mute toggle stay disabled");
+        this.LogWarning("volumeGroup has no genelecSmartIp members: feedback shows only what the group last sent, and volume up/down, " +
+                        "mute toggle and power toggle wait until SetVolume, MuteOn/MuteOff and PowerOn/PowerOff have each been sent once");
 
       return base.CustomActivate();
     }
@@ -205,10 +215,23 @@ namespace PepperDash.Essentials.Plugins
     /// <summary>Puts every speaker in both groups in standby (multicast "STANDBY")</summary>
     public void PowerOff() { SendPower(GenelecSmartIpMulticast.StateStandby); }
 
-    /// <summary>Standby when the first volume member is on, otherwise wake</summary>
+    /// <summary>
+    /// Standby when the first volume member is on, otherwise wake. With no volume members the state is the last
+    /// one the group sent; until it has sent one the toggle is ignored, since a wrong guess would reboot every
+    /// speaker ("BOOT")
+    /// </summary>
     public void PowerToggle()
     {
-      if (PowerIsOnFeedback.BoolValue) PowerOff(); else PowerOn();
+      lock (sync)
+      {
+        if (!active) return;
+        if (source == null && !powerKnown)
+        {
+          this.LogDebug("PowerToggle ignored: power state unknown with no volumeGroup members (PowerOn/PowerOff still work)");
+          return;
+        }
+        if (PowerIsOnFeedback.BoolValue) PowerOff(); else PowerOn();
+      }
     }
 
     private void SetMute(bool mute)
@@ -229,6 +252,9 @@ namespace PepperDash.Essentials.Plugins
         SendLocked(volumeTarget, payload, "power " + state);
         if (muteTarget != null) SendLocked(muteTarget, payload, "power " + state);
         lastCommandUtc = DateTime.UtcNow;
+        powerKnown = true;
+        poweredOn = state == GenelecSmartIpMulticast.StateBoot;
+        if (source == null) PowerIsOnFeedback.FireUpdate();
       }
     }
 

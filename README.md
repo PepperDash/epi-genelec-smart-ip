@@ -57,9 +57,9 @@ What each layout gives you:
 | | A: speakers only | B: group only | C: group + listed speakers | D: mixed |
 |---|---|---|---|---|
 | One command reaches every speaker | no (one device per speaker) | yes | yes | yes |
-| Volume / mute feedback | real, per speaker | last value sent; level shows the top of the range until the first `SetVolume` | real, from the first `volumeGroup` member | real, from the first listed `volumeGroup` member |
+| Volume / mute feedback | real, per speaker | last value sent; level starts at the bottom of the range, mute at off | real, from the first `volumeGroup` member | real, from the first listed `volumeGroup` member |
 | Volume up/down, mute toggle | yes | after the first `SetVolume` / `MuteOn` / `MuteOff` | yes, once the first member reports | as C |
-| Power feedback / toggle | yes | always off, so toggle always wakes (`BOOT` reboots the speakers) | yes, from the first `volumeGroup` member | as C |
+| Power feedback / toggle | yes | last state sent (off at startup); toggle ignored until the first `PowerOn` / `PowerOff` | yes, from the first `volumeGroup` member | as C |
 | Repair of a missed message | n/a (unicast) | no | yes | listed members only |
 | Online status, device info, health | yes | no | yes | for each configured speaker |
 | Commissioning check (`volIp` / `volPort`) | no | no | yes | listed members only |
@@ -99,8 +99,10 @@ send to each of them (for example a room plugin with codec followers).
 }
 ```
 
-No speaker devices. The group logs a warning at startup that it has no feedback. Send `SetVolume` and
-`MuteOn`/`MuteOff` (rather than relying on up/down and toggle) until the first command has set a value. The
+No speaker devices. The group logs a warning at startup that it has no feedback, so its feedback is only what
+it last sent. Volume up/down, mute toggle and power toggle are ignored until `SetVolume`, `MuteOn`/`MuteOff`
+and `PowerOn`/`PowerOff` have each been sent once. The power toggle waits rather than guessing, because a wrong
+guess sends `BOOT`, which reboots every speaker. The
 sub's level is whatever was last set on it, e.g. in Smart IP Manager, since nothing enforces `fixedLevelDb`.
 
 ### C: group plus listed speakers (recommended)
