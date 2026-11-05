@@ -312,7 +312,7 @@ namespace PepperDash.Essentials.Plugins
             : null;
       }
 
-      Interlocked.Exchange(ref deviceInfoStale, 0);
+      Interlocked.Exchange(ref deviceInfoStale, net == null ? 1 : 0);
 
       this.LogInformation("Device info: model {Model}, serial {Serial}, firmware {Firmware}, API {ApiVer}",
           model, DeviceInfo.SerialNumber, DeviceInfo.FirmwareVersion, (string)info["apiVer"]);
