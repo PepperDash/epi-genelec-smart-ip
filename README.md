@@ -469,3 +469,244 @@ Output: `output/PepperDash.Essentials.Plugins.Genelec.Smart.Ip.<version>.cplz`
 ## Git Hooks (Husky.Net)
 
 See the template documentation: a `pre-commit` hook runs `.github/scripts/Update-ReadmeBadges.ps1` to keep the `.NET` and `PepperDash Essentials` badges in sync. Requires PowerShell 7 (`pwsh`) and the .NET SDK. The hook is installed on restore once the folder is a git repository.
+<!-- START Minimum Essentials Framework Versions -->
+### Minimum Essentials Framework Versions
+
+- 3.0.0
+- 3.0.0
+<!-- END Minimum Essentials Framework Versions -->
+<!-- START Config Example -->
+### Config Example
+
+```json
+{
+    "key": "GeneratedKey",
+    "uid": 1,
+    "name": "GeneratedName",
+    "type": "GenelecSmartIpProperties",
+    "group": "Group",
+    "properties": {
+        "host": "SampleString",
+        "port": 0,
+        "username": "SampleString",
+        "password": "SampleString",
+        "pollTimeMs": 0,
+        "requestTimeoutMs": 0,
+        "volumeMinDb": 0,
+        "volumeMaxDb": 0,
+        "volumeStepDb": 0,
+        "volumeRampIntervalMs": 0,
+        "fixedLevelDb": 0,
+        "fixedInput": "SampleString",
+        "inputs": {
+            "SampleString": {
+                "name": "SampleString",
+                "inputs": [
+                    "SampleString"
+                ]
+            }
+        },
+        "presets": {
+            "SampleString": {
+                "name": "SampleString",
+                "levelDb": 0,
+                "mute": true
+            }
+        }
+    }
+}
+```
+<!-- END Config Example -->
+<!-- START Supported Types -->
+
+<!-- END Supported Types -->
+<!-- START Join Maps -->
+### Join Maps
+
+#### Digitals
+
+| Join | Type (RW) | Description |
+| --- | --- | --- |
+| 1 | R | Is Online |
+| 2 | R | Power On (ACTIVE) & Power Is On feedback |
+| 3 | R | Power Off (STANDBY) & Power Is Off feedback |
+| 4 | R | Power Toggle |
+| 5 | R | Volume Up (ramps while held) |
+| 6 | R | Volume Down (ramps while held) |
+| 7 | R | Mute Toggle & Mute Is On feedback |
+| 8 | R | Mute On & Mute Is On feedback |
+| 9 | R | Mute Off & Mute Is Off feedback |
+| 11 | R | Input Select (config order) & Input Is Selected feedback |
+
+#### Analogs
+
+| Join | Type (RW) | Description |
+| --- | --- | --- |
+| 1 | R | Volume Level set & feedback (0-65535 scaled over volumeMinDb..volumeMaxDb) |
+| 2 | R | Input Select by 1-based index & feedback (0 = none / unmatched) |
+| 3 | R | Communication Monitor status (MonitorStatus as ushort) |
+
+#### Serials
+
+| Join | Type (RW) | Description |
+| --- | --- | --- |
+| 1 | R | Device Name |
+| 2 | R | Current Input Name |
+| 3 | R | Model |
+| 4 | R | Serial Number (barcode) |
+| 5 | R | Firmware Version |
+| 6 | R | MAC Address |
+| 7 | R | IP Address / host |
+| 11 | R | Input Names (config order) |
+<!-- END Join Maps -->
+<!-- START Interfaces Implemented -->
+### Interfaces Implemented
+
+- IDisposable
+- IBasicVolumeWithFeedback
+- IHasPowerControlWithFeedback
+- IHasInputs<string>
+- ICommunicationMonitor
+- IDeviceInfoProvider
+- IDspPresets
+- ISelectableItem
+- IKeyName
+- ISelectableItems<string>
+<!-- END Interfaces Implemented -->
+<!-- START Base Classes -->
+### Base Classes
+
+- EssentialsBridgeableDevice
+- EventArgs
+- JoinMapBaseAdvanced
+- EssentialsDevice
+- StatusMonitorBase
+<!-- END Base Classes -->
+<!-- START Public Methods -->
+### Public Methods
+
+- public string Send(IPEndPoint target, byte[] payload, int count = 2, int gapMs = 20)
+- public void Dispose()
+- public void Poll()
+- public void UpdateDeviceInfo()
+- public void PowerOn()
+- public void PowerOff()
+- public void PowerToggle()
+- public void SetVolume(ushort level)
+- public void VolumeUp(bool pressRelease)
+- public void VolumeDown(bool pressRelease)
+- public void MuteOn()
+- public void MuteOff()
+- public void MuteToggle()
+- public void RecallPreset(string key)
+- public void SelectInput(int index)
+- public void Select()
+- public void Dispose()
+- public void SetVolume(ushort level)
+- public void VolumeUp(bool pressRelease)
+- public void VolumeDown(bool pressRelease)
+- public void MuteOn()
+- public void MuteOff()
+- public void MuteToggle()
+- public void PowerOn()
+- public void PowerOff()
+- public void PowerToggle()
+- public void RecallPreset(string key)
+- public void NotifyItemsUpdated()
+- public void Post(T value)
+- public void ReportSuccess()
+- public void ReportFailure()
+- public void Level(double db)
+- public void Mute(bool mute)
+- public void Group_Config_Binds_Presets()
+- public void Group_Config_Without_Presets_Is_Unchanged()
+- public void Both_Device_Configs_Have_An_Optional_Presets_Object(string type)
+- public void Display_Name_Falls_Back_To_The_Key()
+- public void Normalize_Skips_Blank_Null_And_Case_Duplicate_Keys_With_A_Warning()
+- public void Level_Only_Preset_Sends_Only_The_Level()
+- public void Mute_Only_Preset_Sends_Only_The_Mute()
+- public void Level_And_Unmute_Sends_Level_Then_Unmute()
+- public void Level_And_Mute_Sends_Mute_Then_Level()
+- public void Level_Is_Clamped_To_The_Device_Range(string key, string expected)
+- public void Level_Is_Rounded_To_A_Tenth_And_Clamp_Accepts_A_Reversed_Range()
+- public void Keys_Match_Case_Insensitively(string key)
+- public void Unknown_Key_Does_Nothing(string? key)
+- public void No_Presets_Configured_Recalls_Nothing()
+- public void Device_Implements_IDspPresets(string type)
+- public void Recall_Uses_The_Devices_Normal_Level_And_Mute_Paths(string type, string levelPath, string mutePath)
+- public void RecallPreset(string key)
+- public void Config_Class_Exists_With_Parameterless_Ctor()
+- public void Config_Property_Has_JsonPropertyAttribute(string jsonName)
+- public void Input_Config_Class_Has_Name_And_Inputs()
+- public void Defaults_Are_Documented_In_Source()
+- public void FixedLevelDb_Is_Optional()
+- public void FixedInput_Is_Optional()
+- public void Default_Inputs_Are_The_Four_Agreed_Items()
+- public void Device_Implements_Interface(string interfaceName)
+- public void JoinMap_Derives_From_JoinMapBaseAdvanced()
+- public void JoinMap_Has_No_Same_Direction_Collisions()
+- public void Level_Message_Is_Clamped_And_Rounded(double db, string expected)
+- public void Level_Message_Uses_A_Dot_Whatever_The_Culture()
+- public void Mute_Messages()
+- public void Power_Messages_Are_Standby_And_Boot_Only()
+- public void ClampDb_Handles_NaN()
+- public void LevelDiffers_At_Device_Resolution(double a, double b, bool expected)
+- public void Valid_Groups(string address, int port)
+- public void Invalid_Groups(string address, int port, string reason)
+- public void Speaker_Group_Comparison()
+- public void Sender_Sends_Each_Message_Count_Times()
+- public void Sender_Rejects_A_Bad_Local_Address()
+- public void Config_Property_Has_JsonPropertyAttribute(string type, string jsonName)
+- public void Config_Defaults_Are_Documented_In_Source()
+- public void Group_Implements_Interface(string name)
+- public void Speaker_Exposes_What_The_Group_Reads(string property)
+- public void Speaker_Raises_VolumeReported_For_The_Group_To_Learn_From()
+- public void Assembly_Loads_And_Has_Expected_Name()
+- public void Both_Factories_Are_Discoverable()
+- public void Factories_Have_Parameterless_Constructors()
+- public void Factory_Registers_Its_TypeName_Once(string factory, string typeName)
+- public void Minimum_Version_Is_Numeric_And_Matches_Csproj_Core(string factory)
+- public void ToScaled_Maps_Linearly_And_Clamps(double db, int expected)
+- public void ToDb_Endpoints()
+- public void ToDb_Rounds_To_Tenth_Db()
+- public void Round_Trip_Is_Within_One_Tenth_Db()
+- public void Custom_Max_Cap_Maps_Full_Scale_To_Cap()
+- public void Degenerate_Range_Returns_Zero()
+- public void Clamp_Limits_And_Rounds(double input, double expected)
+- public void FixedLevel_Null_Means_Feature_Off()
+- public void FixedLevel_In_Api_Range_Is_Kept_And_Rounded(double input, double expected)
+- public void FixedLevel_Outside_Api_Range_Is_Rejected(double input)
+- public void NeedsFixedLevel_Only_When_Level_Differs(double current, double target, bool expected)
+- public void SameSet_Compares_As_Sets(string[] current, string[] wanted, bool expected)
+- public void SameSet_Treats_Null_As_Empty()
+- public void ResolveKey_Empty_Means_Feature_Off(string? wanted)
+- public void ResolveKey_Matches_Configured_Key_Case_Insensitively(string wanted, string expected)
+- public void InvalidInputNames_Accepts_Api_Names(string csv)
+- public void InvalidInputNames_Returns_Only_The_Bad_Entries(string[] inputs, string[] expected)
+- public void InvalidInputNames_Null_Entries_And_Lists()
+- public void ValidInputNames_Match_The_Api_Doc()
+- public void ResolveKey_Unknown_Key_Is_Rejected()
+<!-- END Public Methods -->
+<!-- START Bool Feedbacks -->
+### Bool Feedbacks
+
+- PowerIsOnFeedback
+- PowerIsOffFeedback
+- MuteFeedback
+- MuteIsOffFeedback
+- MuteFeedback
+- PowerIsOnFeedback
+<!-- END Bool Feedbacks -->
+<!-- START Int Feedbacks -->
+### Int Feedbacks
+
+- VolumeLevelFeedback
+- CurrentInputIndexFeedback
+- VolumeLevelFeedback
+<!-- END Int Feedbacks -->
+<!-- START String Feedbacks -->
+### String Feedbacks
+
+- CurrentInputNameFeedback
+- ModelFeedback
+<!-- END String Feedbacks -->
