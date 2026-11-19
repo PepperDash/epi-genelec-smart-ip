@@ -1,13 +1,11 @@
 ![PepperDash Essentials Plugin Logo](/images/essentials-plugin-blue.png)
 
-![PepperDash Essentials](https://img.shields.io/badge/PepperDash%20Essentials-≥%20v2.39.0-blue)
-![.NET](https://img.shields.io/badge/.NET%20Framework-4.7.2-512BD4)
+![PepperDash Essentials](https://img.shields.io/badge/PepperDash%20Essentials-≥%20v3.0.0-blue)
+![.NET](https://img.shields.io/badge/.NET-net8-512BD4)
 ![Crestron](https://img.shields.io/badge/Crestron-4--Series-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 # Genelec Smart IP Essentials Plugin (c) 2026
-
-> **`maintenance-essentials-v2` branch:** this build targets **Essentials v2** (`net472`, PepperDashEssentials 2.39.0) for systems that have not moved to Essentials v3. New work goes to `main` (Essentials v3, `net8`) first and is ported here when a v2 system needs it.
 
 ## License
 
@@ -296,8 +294,7 @@ With `fixedInput` set, the input-select joins (digitals 11-20 and analog 2 from 
 
 ## Minimum Essentials Framework Versions
 
-* 2.39.0 (this branch, Essentials v2)
-* 3.0.0 (`main`, Essentials v3)
+* 3.0.0
 
 ## Multicast group (`genelecSmartIpMulticastGroup`)
 

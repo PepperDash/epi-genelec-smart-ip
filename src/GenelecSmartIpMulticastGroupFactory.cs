@@ -15,7 +15,7 @@ namespace PepperDash.Essentials.Plugins
     public GenelecSmartIpMulticastGroupFactory()
     {
       // Keep equal to the PepperDashEssentials PackageReference version in the csproj
-      MinimumEssentialsFrameworkVersion = "2.39.0";
+      MinimumEssentialsFrameworkVersion = "3.0.0";
 
       TypeNames = new List<string> { "genelecSmartIpMulticastGroup" };
     }

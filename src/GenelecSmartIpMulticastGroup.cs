@@ -95,7 +95,7 @@ namespace PepperDash.Essentials.Plugins
     public BoolFeedback PowerIsOnFeedback { get; private set; }
 
     /// <inheritdoc />
-    public override bool CustomActivate()
+    protected override bool CustomActivate()
     {
       var vol = Resolve(config.VolumeGroup.Members, "volumeGroup.members");
       var volKeys = new HashSet<string>(vol.Select(m => m.Key), StringComparer.OrdinalIgnoreCase);

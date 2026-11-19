@@ -3,9 +3,7 @@
 		<ProjectType>ProgramLibrary</ProjectType>
 	</PropertyGroup>
 	<PropertyGroup>
-		<TargetFramework>net472</TargetFramework>
-		<Nullable>disable</Nullable>
-		<LangVersion>10</LangVersion>
+		<TargetFramework>net8</TargetFramework>
 		<RootNamespace>PepperDash.Essentials.Plugins</RootNamespace>
 		<AssemblyName>PepperDash.Essentials.Plugins.Genelec.Smart.Ip</AssemblyName>
 		<Deterministic>false</Deterministic>
@@ -31,13 +29,8 @@
 
 	<ItemGroup>
 		<!-- Keep equal to MinimumEssentialsFrameworkVersion (numeric core) in the factory -->
-		<PackageReference Include="PepperDashEssentials" Version="2.39.0">
+		<PackageReference Include="PepperDashEssentials" Version="3.0.0-rc.20">
 			<ExcludeAssets>runtime</ExcludeAssets>
 		</PackageReference>
-	</ItemGroup>
-
-	<ItemGroup>
-		<!-- HttpClient is not part of the net472 base class library -->
-		<Reference Include="System.Net.Http" />
 	</ItemGroup>
 </Project>
