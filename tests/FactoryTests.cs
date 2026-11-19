@@ -7,6 +7,7 @@ namespace PepperDash.Essentials.Plugins.Tests;
 public class FactoryTests
 {
   private const string FactoryName = "GenelecSmartIpDeviceFactory";
+  private const string MulticastFactoryName = "GenelecSmartIpMulticastGroupFactory";
 
   [Fact]
   public void Assembly_Loads_And_Has_Expected_Name()
@@ -16,31 +17,37 @@ public class FactoryTests
   }
 
   [Fact]
-  public void Exactly_One_Factory_Is_Discoverable()
+  public void Both_Factories_Are_Discoverable()
   {
-    var factories = AssemblyFixture.FindFactoryTypes();
-    factories.Should().ContainSingle().Which.Name.Should().Be(FactoryName);
+    // direct speaker control and multicast group control: the EPI deploys either way
+    var factories = AssemblyFixture.FindFactoryTypes().Select(t => t.Name).ToList();
+    factories.Should().BeEquivalentTo(new[] { FactoryName, MulticastFactoryName });
   }
 
   [Fact]
-  public void Factory_Has_Parameterless_Constructor()
+  public void Factories_Have_Parameterless_Constructors()
   {
-    AssemblyFixture.FindFactoryTypes().Single().GetConstructor(Type.EmptyTypes).Should().NotBeNull();
+    foreach (var factory in AssemblyFixture.FindFactoryTypes())
+      factory.GetConstructor(Type.EmptyTypes).Should().NotBeNull(factory.Name);
   }
 
-  [Fact]
-  public void Factory_Registers_TypeName_genelecSmartIp()
+  [Theory]
+  [InlineData(FactoryName, "genelecSmartIp")]
+  [InlineData(MulticastFactoryName, "genelecSmartIpMulticastGroup")]
+  public void Factory_Registers_Its_TypeName_Once(string factory, string typeName)
   {
-    var src = AssemblyFixture.FindSourceForClass(FactoryName);
+    var src = AssemblyFixture.FindSourceForClass(factory);
     src.Should().NotBeNull();
     src!.Should().Contain("TypeNames");
-    Regex.Matches(src!, "\"genelecSmartIp\"").Count.Should().Be(1);
+    Regex.Matches(src!, "\"" + typeName + "\"").Count.Should().Be(1);
   }
 
-  [Fact]
-  public void Minimum_Version_Is_Numeric_And_Matches_Csproj_Core()
+  [Theory]
+  [InlineData(FactoryName)]
+  [InlineData(MulticastFactoryName)]
+  public void Minimum_Version_Is_Numeric_And_Matches_Csproj_Core(string factory)
   {
-    var src = AssemblyFixture.FindSourceForClass(FactoryName)!;
+    var src = AssemblyFixture.FindSourceForClass(factory)!;
     var min = Regex.Match(src, "MinimumEssentialsFrameworkVersion\\s*=\\s*\"([^\"]*)\"").Groups[1].Value;
     min.Should().MatchRegex("^\\d+\\.\\d+\\.\\d+$", "a prerelease suffix makes the loader skip the plugin");
 
