@@ -30,5 +30,8 @@
     <Compile Include="..\src\GenelecSmartIpInputMatch.cs" Link="GenelecSmartIpInputMatch.cs" />
     <Compile Include="..\src\GenelecSmartIpMulticast.cs" Link="GenelecSmartIpMulticast.cs" />
     <Compile Include="..\src\GenelecSmartIpMulticastSender.cs" Link="GenelecSmartIpMulticastSender.cs" />
+    <Compile Include="..\src\GenelecSmartIpPresets.cs" Link="GenelecSmartIpPresets.cs" />
+    <!-- Newtonsoft-only config, linked so the "presets" binding can be tested with real JSON -->
+    <Compile Include="..\src\GenelecSmartIpMulticastGroupConfig.cs" Link="GenelecSmartIpMulticastGroupConfig.cs" />
   </ItemGroup>
 </Project>

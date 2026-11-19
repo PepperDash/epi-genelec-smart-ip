@@ -26,7 +26,7 @@ namespace PepperDash.Essentials.Plugins
   /// power at off, and power toggle (like volume up/down and mute toggle) waits until the group has sent a value.
   /// </para>
   /// </summary>
-  public class GenelecSmartIpMulticastGroup : EssentialsDevice, IBasicVolumeWithFeedback, IHasPowerControlWithFeedback
+  public class GenelecSmartIpMulticastGroup : EssentialsDevice, IBasicVolumeWithFeedback, IHasPowerControlWithFeedback, IDspPresets
   {
     private const int MaxRampSteps = 200;
     private const int RepairTickMs = 2000;
@@ -39,6 +39,7 @@ namespace PepperDash.Essentials.Plugins
     private readonly HashSet<string> warnedMembers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     private readonly double minDb;
     private readonly double maxDb;
+    private readonly Dictionary<string, GenelecSmartIpPresetConfig> presets;
 
     private GenelecSmartIpMulticastSender sender;
     private List<GenelecSmartIpDevice> volumeMembers = new List<GenelecSmartIpDevice>();
@@ -70,6 +71,9 @@ namespace PepperDash.Essentials.Plugins
       maxDb = Math.Min(GenelecSmartIpMulticast.MaxDb, Math.Max(config.VolumeMinDb, config.VolumeMaxDb));
       levelDb = minDb;   // with no member to read from, never show a full-scale level before the first command
 
+      presets = GenelecSmartIpPresets.Normalize(config.Presets, problem => this.LogWarning("{Problem}", problem));
+      Presets = GenelecSmartIpPresetItem.BuildList(presets);
+
       volumeTarget = new IPEndPoint(IPAddress.Parse(config.VolumeGroup.Address.Trim()), config.VolumeGroup.Port);
       if (config.MuteGroup != null)
         muteTarget = new IPEndPoint(IPAddress.Parse(config.MuteGroup.Address.Trim()), config.MuteGroup.Port);
@@ -93,6 +97,11 @@ namespace PepperDash.Essentials.Plugins
     /// Power state of the first volume member (the multicast API itself has no feedback)
     /// </summary>
     public BoolFeedback PowerIsOnFeedback { get; private set; }
+
+    /// <summary>
+    /// Level/mute presets from the "presets" config (keys match case-insensitively)
+    /// </summary>
+    public Dictionary<string, IKeyName> Presets { get; private set; }
 
     /// <inheritdoc />
     protected override bool CustomActivate()
@@ -231,6 +240,29 @@ namespace PepperDash.Essentials.Plugins
           return;
         }
         if (PowerIsOnFeedback.BoolValue) PowerOff(); else PowerOn();
+      }
+    }
+
+    /// <summary>
+    /// Recalls a configured level/mute preset (e.g. a room's startup preset): the level goes out like SetVolume
+    /// (clamped to volumeMinDb..volumeMaxDb) and the mute like MuteOn/MuteOff, only for the fields the preset has.
+    /// An unknown key is logged and ignored
+    /// </summary>
+    public void RecallPreset(string key)
+    {
+      lock (sync)
+      {
+        if (!active) return;
+        if (!presets.ContainsKey((key ?? string.Empty).Trim()))
+        {
+          this.LogWarning("RecallPreset: no preset '{Key}' (configured: {Presets})", key,
+              presets.Count > 0 ? string.Join(", ", presets.Keys) : "none");
+          return;
+        }
+        this.LogInformation("Recalling preset '{Key}'", key);
+        GenelecSmartIpPresets.Recall(presets, key, minDb, maxDb,
+            db => { StopRampLocked(); ApplyLevelLocked(db); },
+            SetMuteLocked);
       }
     }
 

@@ -25,7 +25,8 @@ namespace PepperDash.Essentials.Plugins
       IHasPowerControlWithFeedback,
       IHasInputs<string>,
       ICommunicationMonitor,
-      IDeviceInfoProvider
+      IDeviceInfoProvider,
+      IDspPresets
   {
     private const string StateActive = "ACTIVE";
     private const string StateStandby = "STANDBY";
@@ -41,6 +42,7 @@ namespace PepperDash.Essentials.Plugins
     private int levelWriteGeneration;                  // bumped by every level write (under levelLock)
     private readonly double? fixedLevelDb;
     private readonly GenelecSmartIpLatestValueSender<double> levelSender;
+    private readonly Dictionary<string, GenelecSmartIpPresetConfig> presets;
     private GenelecSmartIpInputItem fixedInputItem;
     private bool fixedInputCorrecting;
 
@@ -84,6 +86,9 @@ namespace PepperDash.Essentials.Plugins
         this.LogInformation("Level fixed at {Level} dB (fixedLevelDb); volume commands will be ignored", fixedLevelDb.Value);
       }
 
+      presets = GenelecSmartIpPresets.Normalize(config.Presets, problem => this.LogWarning("{Problem}", problem));
+      Presets = GenelecSmartIpPresetItem.BuildList(presets);
+
       DeviceInfo = new DeviceInfoModel { IpAddress = config.Host };
 
       PowerIsOnFeedback = new BoolFeedback("PowerIsOn", () => powerState == StateActive);
@@ -112,6 +117,11 @@ namespace PepperDash.Essentials.Plugins
     }
 
     #region Properties
+
+    /// <summary>
+    /// Level/mute presets from the "presets" config (keys match case-insensitively)
+    /// </summary>
+    public Dictionary<string, IKeyName> Presets { get; private set; }
 
     /// <inheritdoc />
     public BoolFeedback PowerIsOnFeedback { get; private set; }
@@ -555,6 +565,30 @@ namespace PepperDash.Essentials.Plugins
     public void MuteToggle()
     {
       SetMute(!muted);
+    }
+
+    /// <summary>
+    /// Recalls a configured level/mute preset (e.g. a room's startup preset): the level is written like SetVolume
+    /// (clamped to volumeMinDb..volumeMaxDb; ignored with fixedLevelDb) and the mute like MuteOn/MuteOff, only for
+    /// the fields the preset has. An unknown key is logged and ignored
+    /// </summary>
+    public void RecallPreset(string key)
+    {
+      if (!presets.ContainsKey((key ?? string.Empty).Trim()))
+      {
+        this.LogWarning("RecallPreset: no preset '{Key}' (configured: {Presets})", key,
+            presets.Count > 0 ? string.Join(", ", presets.Keys) : "none");
+        return;
+      }
+      this.LogInformation("Recalling preset '{Key}'", key);
+      GenelecSmartIpPresets.Recall(presets, key, config.VolumeMinDb, config.VolumeMaxDb,
+          db =>
+          {
+            if (IgnoreForFixedLevel("RecallPreset level")) return;
+            lock (stateLock) StopRamp();
+            SetLevelDb(db);
+          },
+          SetMute);
     }
 
     private void SetMute(bool mute)

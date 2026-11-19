@@ -120,6 +120,14 @@ namespace PepperDash.Essentials.Plugins
     public Dictionary<string, GenelecSmartIpInputConfig> Inputs { get; set; }
 
     /// <summary>
+    /// Optional level/mute presets keyed by preset key (case-insensitive), recalled through IDspPresets, e.g. a
+    /// room's startup and shutdown presets. Each sets levelDb (clamped to volumeMinDb..volumeMaxDb) and/or mute.
+    /// With fixedLevelDb set, a preset's level is ignored (its mute still applies)
+    /// </summary>
+    [JsonProperty("presets")]
+    public Dictionary<string, GenelecSmartIpPresetConfig> Presets { get; set; }
+
+    /// <summary>
     /// Default input items used when none are configured
     /// </summary>
     public static Dictionary<string, GenelecSmartIpInputConfig> DefaultInputs()

@@ -170,6 +170,7 @@ Device type: `genelecSmartIp`
 | `inputs` | analog, aoip1, aoip2, aoip1and2 | Items map to a set of `A` / `AoIP01` / `AoIP02` |
 | `fixedLevelDb` | not set (optional) | Fixed "set and forget" level, -200.0 to 0.0 dB. See below |
 | `fixedInput` | not set (optional) | Key of one `inputs` item the speaker always plays. See below |
+| `presets` | not set (optional) | Level/mute presets a room can recall (`IDspPresets`). See [Presets](#presets-presets) |
 
 ### Fixed level (`fixedLevelDb`)
 
@@ -233,6 +234,39 @@ When it is set:
   attempts log at Debug.
 
 `fixedInput` and `fixedLevelDb` are independent: use either or both.
+
+### Presets (`presets`)
+
+Optional, on both `genelecSmartIp` and `genelecSmartIpMulticastGroup`. Named level/mute settings that a room
+or Mobile Control recalls the same way as DSP presets: both device types implement Essentials' `IDspPresets`
+(`Presets` lists them, `RecallPreset(key)` applies one; Mobile Control's `/recallPreset` calls it). Typical
+use: a startup level when the room turns on and a mute when it turns off.
+
+```json
+"presets": {
+  "startup":  { "name": "Startup", "levelDb": -25, "mute": false },
+  "shutdown": { "name": "Shutdown", "mute": true }
+}
+```
+
+| Field | Default | Notes |
+|---|---|---|
+| key (`startup`, ...) | required | Preset key. Matched case-insensitively (`Startup` recalls `startup`) |
+| `name` | the key | Display name in `Presets` |
+| `levelDb` | not set | Level in dB, clamped to the device's `volumeMinDb`..`volumeMaxDb` and rounded to 0.1 dB. Omit to leave the level alone |
+| `mute` | not set | `true` mutes, `false` unmutes. Omit to leave mute alone |
+
+When a preset is recalled:
+* **Only the fields present are applied.** A preset with only `mute` doesn't touch the level, and the other way round.
+* **Same path as normal commands.** The group sends the level like `SetVolume` and the mute like `MuteOn` /
+  `MuteOff` (feedback, `sendCount`, repair and logging all behave the same, and a running ramp stops). The
+  speaker writes them like its own `SetVolume` / `MuteOn` / `MuteOff`.
+* **Order:** a preset that mutes sends the mute before the level; one that unmutes sends the level first.
+  So the level change itself isn't heard.
+* **`fixedLevelDb`:** on a speaker with `fixedLevelDb`, a preset's level is ignored (debug log), and its
+  mute still applies.
+* **Unknown key:** logged as a warning, nothing is sent. Blank keys, empty entries and keys that differ
+  only in case are logged at startup and skipped (the first one wins).
 
 ## Join Map
 
@@ -335,7 +369,11 @@ see [Ways to deploy](#ways-to-deploy) for what that gives up. A full example:
     "volumeRampIntervalMs": 250,
     "localAddress": "",
     "sendCount": 2,
-    "repairDelayMs": 6000
+    "repairDelayMs": 6000,
+    "presets": {
+      "startup":  { "name": "Startup", "levelDb": -25, "mute": false },
+      "shutdown": { "name": "Shutdown", "mute": true }
+    }
   }
 }
 ```
@@ -349,6 +387,7 @@ see [Ways to deploy](#ways-to-deploy) for what that gives up. A full example:
 | `localAddress` | OS chooses | Processor interface to send from. On a processor with a LAN and a control subnet, set the LAN address so the multicast leaves on the speakers' network |
 | `sendCount` | 2 | Times each message is sent (20 ms apart). Multicast has no acknowledgement; the messages are idempotent |
 | `repairDelayMs` | 6000 | Wait after a command before comparing members' polled values with the group (one 5 s poll plus margin) |
+| `presets` | not set | Level/mute presets recalled through `IDspPresets`, e.g. on room startup. Same shape as on a speaker, see [Presets](#presets-presets); `levelDb` is clamped to the group's range |
 
 Members: don't give a `volumeGroup` member `fixedLevelDb` (it would put its level back after every change;
 a warning is logged). A `muteGroup` member keeps `fixedLevelDb`, which is the point of the mute group.
