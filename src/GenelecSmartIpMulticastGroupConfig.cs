@@ -14,7 +14,11 @@ namespace PepperDash.Essentials.Plugins
   ///     "volumeGroup": { "address": "239.10.10.1", "port": 49152, "members": [ "genelec-front-left", "genelec-front-right" ] },
   ///     "muteGroup":   { "address": "239.10.10.2", "port": 49153, "members": [ "genelec-subwoofer" ] },
   ///     "volumeMinDb": -60, "volumeMaxDb": 0, "volumeStepDb": 1.0, "volumeRampIntervalMs": 250,
-  ///     "localAddress": "", "sendCount": 2
+  ///     "localAddress": "", "sendCount": 2,
+  ///     "presets": {
+  ///       "startup":  { "name": "Startup", "levelDb": -25, "mute": false },
+  ///       "shutdown": { "name": "Shutdown", "mute": true }
+  ///     }
   ///   }
   /// }
   /// </code>
@@ -65,6 +69,13 @@ namespace PepperDash.Essentials.Plugins
     /// </summary>
     [JsonProperty("repairDelayMs")]
     public int RepairDelayMs { get; set; } = 6000;
+
+    /// <summary>
+    /// Optional level/mute presets keyed by preset key (case-insensitive), recalled through IDspPresets, e.g. a
+    /// room's startup and shutdown presets. Each sets levelDb (clamped to volumeMinDb..volumeMaxDb) and/or mute
+    /// </summary>
+    [JsonProperty("presets")]
+    public Dictionary<string, GenelecSmartIpPresetConfig> Presets { get; set; }
   }
 
   /// <summary>
